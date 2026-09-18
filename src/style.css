@@ -1,0 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap");
+
+:root { --font-inter: "Nunito"; --font-jetbrains-mono: "JetBrains Mono"; }
+body { margin: 0; }
+.page-below-navbar { min-height: 100dvh; }
