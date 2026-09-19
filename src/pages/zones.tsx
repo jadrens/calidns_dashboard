@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -31,7 +31,13 @@ import {
   FormControlLabel,
   Checkbox,
   InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
   MenuItem,
+  Menu,
+  Tabs,
+  Tab,
   useTheme,
 } from "@mui/material";
 import { Snackbar } from "../toast";
@@ -44,6 +50,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { alpha } from "@mui/material";
 import {
   hasToken,
@@ -56,6 +63,7 @@ import { validateRecordValue } from "../lib/validation";
 import type { Zone, DnsRecordSet, ZoneCountries } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { useDnsMessages } from "../i18n";
+import { getZoneDepthGroup } from "../lib/zoneGrouping";
 
 const RECORD_TYPES = ["a", "aaaa", "txt", "cname"] as const;
 const RECORD_LABELS: Record<string, string> = {
@@ -64,6 +72,7 @@ const RECORD_LABELS: Record<string, string> = {
   txt: "TXT",
   cname: "CNAME",
 };
+const ZONE_DEPTHS = [1, 2, 3, 4] as const;
 
 function emptyRecordSet(): DnsRecordSet {
   return { a: [], aaaa: [], txt: [], cname: [] };
@@ -92,6 +101,10 @@ export default function ZonesPage() {
   // Search
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Group zones by the requested number of rightmost domain labels.
+  const [zoneDepth, setZoneDepth] = useState<number>(2);
+  const [selectedGroup, setSelectedGroup] = useState("");
+
   // Selection
   const [selectedPatterns, setSelectedPatterns] = useState<Set<string>>(new Set());
 
@@ -99,8 +112,22 @@ export default function ZonesPage() {
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
 
+  const zoneGroups = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const zone of zones) {
+      const group = getZoneDepthGroup(zone.pattern, zoneDepth);
+      counts.set(group, (counts.get(group) || 0) + 1);
+    }
+    return [...counts.entries()].sort(([left], [right]) => left.localeCompare(right));
+  }, [zoneDepth, zones]);
+
+  const activeGroup = zoneGroups.some(([group]) => group === selectedGroup)
+    ? selectedGroup
+    : zoneGroups[0]?.[0] || "";
+
   // Filtered zones
   const filteredZones = zones.filter((z) => {
+    if (getZoneDepthGroup(z.pattern, zoneDepth) !== activeGroup) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.trim().toLowerCase();
     return z.pattern.toLowerCase().includes(q);
@@ -117,6 +144,8 @@ export default function ZonesPage() {
   const [updatingPattern, setUpdatingPattern] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editorError, setEditorError] = useState("");
+  const [zoneMenuAnchor, setZoneMenuAnchor] = useState<HTMLElement | null>(null);
+  const [zoneMenuTarget, setZoneMenuTarget] = useState<Zone | null>(null);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Zone | null>(null);
@@ -435,6 +464,11 @@ export default function ZonesPage() {
     }
   };
 
+  const closeZoneMenu = () => {
+    setZoneMenuAnchor(null);
+    setZoneMenuTarget(null);
+  };
+
   const editorFields = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
       <TextField
@@ -632,7 +666,7 @@ export default function ZonesPage() {
       </Box>
 
       {/* Search + Batch actions */}
-      <Box sx={{ display: "flex", gap: 2, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
+      <Box sx={{ display: "flex", gap: { xs: 1.25, sm: 2 }, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
         <TextField
           size="small"
           placeholder="Search zones..."
@@ -647,9 +681,26 @@ export default function ZonesPage() {
               ),
             },
           }}
-          sx={{ minWidth: 240, flex: 1 }}
+          sx={{ minWidth: { xs: "100%", sm: 240 }, flex: 1 }}
         />
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <FormControl size="small" sx={{ minWidth: 140, flex: { xs: "1 1 140px", sm: "0 0 auto" } }}>
+          <InputLabel id="zone-depth-label">{messages.zoneDepth}</InputLabel>
+          <Select
+            labelId="zone-depth-label"
+            value={zoneDepth}
+            label={messages.zoneDepth}
+            onChange={(event) => {
+              setZoneDepth(Number(event.target.value));
+              setSelectedGroup("");
+              clearSelection();
+            }}
+          >
+            {ZONE_DEPTHS.map((depth) => (
+              <MenuItem key={depth} value={depth}>{depth}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.5, flex: { xs: "1 1 auto", sm: "0 0 auto" } }}>
           <Checkbox
             checked={isAllSelected}
             indeterminate={isIndeterminate}
@@ -674,6 +725,55 @@ export default function ZonesPage() {
           )}
         </Box>
       </Box>
+
+      {zoneGroups.length > 0 && (
+        <>
+        <FormControl fullWidth size="small" sx={{ display: { xs: "flex", sm: "none" }, mb: 2 }}>
+          <InputLabel id="zone-group-label">{messages.zoneGroup}</InputLabel>
+          <Select
+            labelId="zone-group-label"
+            value={activeGroup}
+            label={messages.zoneGroup}
+            onChange={(event) => {
+              setSelectedGroup(event.target.value);
+              clearSelection();
+            }}
+            sx={{ fontFamily: "var(--font-jetbrains-mono), monospace" }}
+          >
+            {zoneGroups.map(([group, count]) => (
+              <MenuItem key={group} value={group} sx={{ fontFamily: "var(--font-jetbrains-mono), monospace" }}>
+                {group} ({count})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Box sx={{ display: { xs: "none", sm: "block" }, borderBottom: 1, borderColor: "divider", mb: 2 }}>
+          <Tabs
+            value={activeGroup}
+            onChange={(_, value: string) => {
+              setSelectedGroup(value);
+              clearSelection();
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+            aria-label={`${messages.zoneDepth} ${zoneDepth}`}
+            sx={{
+              minHeight: 44,
+              "& .MuiTab-root": { minWidth: "auto", minHeight: 44, px: { xs: 1.75, sm: 2 } },
+            }}
+          >
+            {zoneGroups.map(([group, count]) => (
+              <Tab
+                key={group}
+                value={group}
+                label={`${group} (${count})`}
+                sx={{ textTransform: "none", fontFamily: "var(--font-jetbrains-mono), monospace" }}
+              />
+            ))}
+          </Tabs>
+        </Box>
+        </>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError("")}>
@@ -712,16 +812,24 @@ export default function ZonesPage() {
               elevation={0}
               sx={{ border: 1, borderColor: selectedPatterns.has(zone.pattern) ? "primary.main" : "divider", borderRadius: 2 }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", px: { xs: 1, sm: 2 }, gap: 0.5 }}>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "auto minmax(0, 1fr) auto",
+                  alignItems: "center",
+                  px: { xs: 1, sm: 2 },
+                  gap: 0.5,
+                }}
+              >
                 <Checkbox
                   checked={selectedPatterns.has(zone.pattern)}
                   onChange={() => toggleSelect(zone.pattern)}
                   size="small"
                   slotProps={{ input: { "aria-label": `Select ${zone.pattern}` } }}
                 />
-                <ButtonBase onClick={() => setExpandedPattern(expandedPattern === zone.pattern ? null : zone.pattern)} aria-expanded={expandedPattern === zone.pattern} aria-label={`Toggle ${zone.pattern} details`} sx={{ flex: 1, minWidth: 0, minHeight: 52, px: 1, display: "flex", justifyContent: "space-between", textAlign: "left" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem", fontWeight: 600, overflowWrap: "anywhere" }}>
+                <ButtonBase onClick={() => setExpandedPattern(expandedPattern === zone.pattern ? null : zone.pattern)} aria-expanded={expandedPattern === zone.pattern} aria-label={`Toggle ${zone.pattern} details`} sx={{ minWidth: 0, minHeight: 52, px: 1, display: "flex", justifyContent: "space-between", textAlign: "left" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, overflow: "hidden" }}>
+                    <Typography title={zone.pattern} noWrap sx={{ minWidth: 0, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem", fontWeight: 600 }}>
                       {zone.pattern}
                     </Typography>
                     <Chip
@@ -733,14 +841,16 @@ export default function ZonesPage() {
                   </Box>
                   <ExpandMoreIcon sx={{ ml: 1, transform: expandedPattern === zone.pattern ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
                 </ButtonBase>
-                <Tooltip title={messages.copyPattern}><IconButton size="small" onClick={() => copyPattern(zone.pattern)} aria-label={messages.copyPattern}><ContentCopyIcon sx={{ fontSize: 17 }} /></IconButton></Tooltip>
-                <Tooltip title={`${messages.recordQueries}: ${zone.record ? messages.on : messages.off}`}>
-                  <span><IconButton size="small" disabled={updatingPattern === zone.pattern || (saving && editingPattern === zone.pattern)} onClick={() => toggleZoneSetting(zone, "record")} aria-label={messages.recordQueries} aria-pressed={zone.record} sx={{ color: zone.record ? "success.main" : "text.disabled" }}><FiberManualRecordIcon sx={{ fontSize: 20 }} /></IconButton></span>
-                </Tooltip>
-                <Tooltip title={`${messages.fastOpen}: ${zone.fast_open ? messages.on : messages.off}`}>
-                  <span><IconButton size="small" disabled={updatingPattern === zone.pattern || (saving && editingPattern === zone.pattern)} onClick={() => toggleZoneSetting(zone, "fast_open")} aria-label={messages.fastOpen} aria-pressed={zone.fast_open} sx={{ color: zone.fast_open ? "warning.main" : "text.disabled" }}><BoltIcon sx={{ fontSize: 20 }} /></IconButton></span>
-                </Tooltip>
-                <Tooltip title={messages.deleteZone}><IconButton size="small" onClick={() => confirmDeleteZone(zone)} color="error" aria-label={messages.deleteZone}><DeleteIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
+                <IconButton
+                  size="small"
+                  aria-label={`More actions for ${zone.pattern}`}
+                  onClick={(event) => {
+                    setZoneMenuAnchor(event.currentTarget);
+                    setZoneMenuTarget(zone);
+                  }}
+                >
+                  <MoreVertIcon />
+                </IconButton>
               </Box>
               <Collapse in={expandedPattern === zone.pattern} unmountOnExit>
               <Box sx={{ px: { xs: 2, sm: 3 }, pt: 1, pb: 2 }}>
@@ -839,6 +949,53 @@ export default function ZonesPage() {
           ))}
         </Box>
       )}
+
+      <Menu
+        anchorEl={zoneMenuAnchor}
+        open={Boolean(zoneMenuAnchor && zoneMenuTarget)}
+        onClose={closeZoneMenu}
+        slotProps={{ paper: { sx: { minWidth: 210 } } }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (zoneMenuTarget) void copyPattern(zoneMenuTarget.pattern);
+            closeZoneMenu();
+          }}
+        >
+          <ContentCopyIcon sx={{ mr: 1.5, fontSize: 19 }} />
+          {messages.copyPattern}
+        </MenuItem>
+        <MenuItem
+          disabled={!zoneMenuTarget || updatingPattern === zoneMenuTarget.pattern || (saving && editingPattern === zoneMenuTarget.pattern)}
+          onClick={() => {
+            if (zoneMenuTarget) void toggleZoneSetting(zoneMenuTarget, "record");
+            closeZoneMenu();
+          }}
+        >
+          <FiberManualRecordIcon sx={{ mr: 1.5, fontSize: 20, color: zoneMenuTarget?.record ? "success.main" : "text.disabled" }} />
+          {messages.recordQueries}: {zoneMenuTarget?.record ? messages.on : messages.off}
+        </MenuItem>
+        <MenuItem
+          disabled={!zoneMenuTarget || updatingPattern === zoneMenuTarget.pattern || (saving && editingPattern === zoneMenuTarget.pattern)}
+          onClick={() => {
+            if (zoneMenuTarget) void toggleZoneSetting(zoneMenuTarget, "fast_open");
+            closeZoneMenu();
+          }}
+        >
+          <BoltIcon sx={{ mr: 1.5, fontSize: 20, color: zoneMenuTarget?.fast_open ? "warning.main" : "text.disabled" }} />
+          {messages.fastOpen}: {zoneMenuTarget?.fast_open ? messages.on : messages.off}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (zoneMenuTarget) confirmDeleteZone(zoneMenuTarget);
+            closeZoneMenu();
+          }}
+          sx={{ color: "error.main" }}
+        >
+          <DeleteIcon sx={{ mr: 1.5, fontSize: 19 }} />
+          {messages.deleteZone}
+        </MenuItem>
+      </Menu>
 
       {/* --- Add Dialog --- */}
       <Dialog
