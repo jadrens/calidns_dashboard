@@ -14,6 +14,7 @@ export interface ZoneCountries {
 export interface Zone {
   pattern: string;
   regex: string;
+  mode?: "simple" | "golang";
   countries: ZoneCountries;
   ttl: number;
   record: boolean;

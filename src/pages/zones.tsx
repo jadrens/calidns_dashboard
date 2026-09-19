@@ -31,6 +31,7 @@ import {
   FormControlLabel,
   Checkbox,
   InputAdornment,
+  MenuItem,
   useTheme,
 } from "@mui/material";
 import { Snackbar } from "../toast";
@@ -72,6 +73,7 @@ function emptyZone(): Zone {
   return {
     pattern: "",
     regex: "",
+    mode: "simple",
     countries: { default: emptyRecordSet() },
     ttl: 600,
     record: true,
@@ -436,17 +438,41 @@ export default function ZonesPage() {
   const editorFields = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
       <TextField
-        label="Pattern (regex)"
+        select
+        label={messages.matchMode}
+        value={editingZone.mode ?? ""}
+        onChange={(e) => setEditingZone({
+          ...editingZone,
+          mode: (e.target.value || undefined) as Zone["mode"],
+        })}
+        fullWidth
+        helperText={editingZone.mode === "simple"
+          ? messages.simpleModeHelp
+          : editingZone.mode === "golang"
+            ? messages.golangModeHelp
+            : messages.legacyModeHelp}
+      >
+        <MenuItem value="simple">{messages.simpleMode}</MenuItem>
+        <MenuItem value="golang">{messages.golangMode}</MenuItem>
+        <MenuItem value="">{messages.legacyMode}</MenuItem>
+      </TextField>
+
+      <TextField
+        label={editingZone.mode === "simple" ? messages.domain : messages.pattern}
         value={editingZone.pattern}
         onChange={(e) => setEditingZone({ ...editingZone, pattern: e.target.value, regex: e.target.value })}
-        placeholder="^example\.com\.?$"
+        placeholder={editingZone.mode === "simple" ? "example.com" : "^example\\.com\\.?$"}
         fullWidth
         slotProps={{
           input: {
             sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
           },
         }}
-        helperText="Go regex pattern to match incoming DNS queries"
+        helperText={editingZone.mode === "simple"
+          ? messages.simpleModeHelp
+          : editingZone.mode === "golang"
+            ? messages.golangModeHelp
+            : messages.legacyModeHelp}
       />
 
       <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
@@ -694,9 +720,17 @@ export default function ZonesPage() {
                   slotProps={{ input: { "aria-label": `Select ${zone.pattern}` } }}
                 />
                 <ButtonBase onClick={() => setExpandedPattern(expandedPattern === zone.pattern ? null : zone.pattern)} aria-expanded={expandedPattern === zone.pattern} aria-label={`Toggle ${zone.pattern} details`} sx={{ flex: 1, minWidth: 0, minHeight: 52, px: 1, display: "flex", justifyContent: "space-between", textAlign: "left" }}>
-                  <Typography sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem", fontWeight: 600, overflowWrap: "anywhere" }}>
-                    {zone.pattern}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem", fontWeight: 600, overflowWrap: "anywhere" }}>
+                      {zone.pattern}
+                    </Typography>
+                    <Chip
+                      label={zone.mode === "simple" ? messages.simpleMode : zone.mode === "golang" ? messages.golangMode : messages.legacyMode}
+                      size="small"
+                      variant="outlined"
+                      sx={{ flexShrink: 0 }}
+                    />
+                  </Box>
                   <ExpandMoreIcon sx={{ ml: 1, transform: expandedPattern === zone.pattern ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
                 </ButtonBase>
                 <Tooltip title={messages.copyPattern}><IconButton size="small" onClick={() => copyPattern(zone.pattern)} aria-label={messages.copyPattern}><ContentCopyIcon sx={{ fontSize: 17 }} /></IconButton></Tooltip>
