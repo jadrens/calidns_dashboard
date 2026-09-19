@@ -65,17 +65,41 @@ import { useDocumentTitle } from "../useDocumentTitle";
 import { useDnsMessages } from "../i18n";
 import { getZoneDepthGroup } from "../lib/zoneGrouping";
 
-const RECORD_TYPES = ["a", "aaaa", "txt", "cname"] as const;
-const RECORD_LABELS: Record<string, string> = {
+type RecordType = keyof DnsRecordSet;
+
+const RECORD_TYPES: readonly RecordType[] = [
+  "a", "aaaa", "txt", "cname", "mx", "ns", "srv", "caa", "ptr", "soa", "other",
+];
+const RECORD_LABELS: Record<RecordType, string> = {
   a: "A (IPv4)",
   aaaa: "AAAA (IPv6)",
   txt: "TXT",
   cname: "CNAME",
+  mx: "MX",
+  ns: "NS",
+  srv: "SRV",
+  caa: "CAA",
+  ptr: "PTR",
+  soa: "SOA",
+  other: "Other",
+};
+const RECORD_PLACEHOLDERS: Record<RecordType, string> = {
+  a: "192.0.2.10",
+  aaaa: "2001:db8::10",
+  txt: "v=spf1 mx -all",
+  cname: "target.example.com.",
+  mx: "10 mail.example.com.",
+  ns: "ns1.example.com.",
+  srv: "10 5 443 service.example.com.",
+  caa: '0 issue "letsencrypt.org"',
+  ptr: "host.example.com.",
+  soa: "ns1.example.com. hostmaster.example.com. 2026092001 3600 900 1209600 300",
+  other: "SSHFP 1 1 0123456789abcdef...",
 };
 const ZONE_DEPTHS = [1, 2, 3, 4] as const;
 
 function emptyRecordSet(): DnsRecordSet {
-  return { a: [], aaaa: [], txt: [], cname: [] };
+  return Object.fromEntries(RECORD_TYPES.map((type) => [type, []])) as DnsRecordSet;
 }
 
 function emptyZone(): Zone {
@@ -223,7 +247,7 @@ export default function ZonesPage() {
     setEditingZone({ ...editingZone, countries });
   };
 
-  const updateRecordValue = (countryCode: string, recordType: string, index: number, value: string) => {
+  const updateRecordValue = (countryCode: string, recordType: RecordType, index: number, value: string) => {
     const records = { ...editingZone.countries[countryCode] } as Record<string, string[]>;
     const arr = [...(records[recordType] || [])];
     arr[index] = value;
@@ -233,7 +257,8 @@ export default function ZonesPage() {
       countries: { ...editingZone.countries, [countryCode]: records as DnsRecordSet },
     });
 
-    // Validate IP for A/AAAA records
+    // Validate record types with client-side validators. The API performs the
+    // authoritative validation for structured and generic DNS records.
     const errorKey = `${countryCode}:${recordType}:${index}`;
     const err = validateRecordValue(recordType, value);
     setRecordErrors((prev) => {
@@ -247,7 +272,7 @@ export default function ZonesPage() {
     });
   };
 
-  const addRecordValue = (countryCode: string, recordType: string) => {
+  const addRecordValue = (countryCode: string, recordType: RecordType) => {
     const records = { ...editingZone.countries[countryCode] } as Record<string, string[]>;
     records[recordType] = [...(records[recordType] || []), ""];
     setEditingZone({
@@ -256,7 +281,7 @@ export default function ZonesPage() {
     });
   };
 
-  const removeRecordValue = (countryCode: string, recordType: string, index: number) => {
+  const removeRecordValue = (countryCode: string, recordType: RecordType, index: number) => {
     const records = { ...editingZone.countries[countryCode] } as Record<string, string[]>;
     records[recordType] = [...(records[recordType] || [])];
     records[recordType].splice(index, 1);
@@ -603,7 +628,7 @@ export default function ZonesPage() {
                         fullWidth
                         value={val}
                         onChange={(e) => updateRecordValue(code, type, i, e.target.value)}
-                        placeholder={type === "a" ? "e.g. 192.168.1.1" : type === "aaaa" ? "e.g. 2001:db8::1" : "Enter value..."}
+                        placeholder={RECORD_PLACEHOLDERS[type]}
                         error={!!recordErrors[`${code}:${type}:${i}`]}
                         helperText={recordErrors[`${code}:${type}:${i}`] || undefined}
                         slotProps={{

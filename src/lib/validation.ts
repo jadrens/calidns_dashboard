@@ -40,7 +40,7 @@ export function isValidIPv6(value: string): boolean {
 /**
  * Validates a record value based on its record type.
  * Returns an error message string if invalid, or null if valid.
- * Non-IP types (txt, cname) always pass validation.
+ * Non-IP types are validated authoritatively by the DNS API.
  */
 export function validateRecordValue(
   type: string,

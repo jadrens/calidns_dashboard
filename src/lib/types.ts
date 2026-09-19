@@ -5,6 +5,13 @@ export interface DnsRecordSet {
   aaaa?: string[];
   txt?: string[];
   cname?: string[];
+  mx?: string[];
+  ns?: string[];
+  srv?: string[];
+  caa?: string[];
+  ptr?: string[];
+  soa?: string[];
+  other?: string[];
 }
 
 export interface ZoneCountries {
