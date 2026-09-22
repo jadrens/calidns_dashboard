@@ -136,7 +136,7 @@ export interface ApiError {
 }
 
 export interface ServerConfig {
-  listen: string;
+  listen: string[];
   default_ttl: number;
   default_response: "refuse" | "nxdomain" | "servfail";
   default_record: boolean;

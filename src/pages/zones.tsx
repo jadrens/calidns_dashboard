@@ -461,18 +461,22 @@ export default function ZonesPage() {
     if (selectedPatterns.size === 0) return;
     setBatchDeleting(true);
     let deleted = 0;
+    const failed: string[] = [];
     for (const pattern of selectedPatterns) {
       try {
         await deleteZone(pattern);
         deleted++;
       } catch {
-        // continue with remaining
+        failed.push(pattern);
       }
     }
     setBatchDeleting(false);
     setBatchDeleteOpen(false);
-    setSelectedPatterns(new Set());
-    showToast(`Deleted ${deleted} zone(s)`, deleted > 0 ? "success" : "error");
+    setSelectedPatterns(new Set(failed));
+    showToast(
+      failed.length > 0 ? `Deleted ${deleted} zone(s); ${failed.length} failed` : `Deleted ${deleted} zone(s)`,
+      failed.length > 0 ? "error" : "success"
+    );
     await fetchZones();
   };
 

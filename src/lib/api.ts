@@ -40,7 +40,9 @@ export function removeToken(): void {
 }
 
 export function hasToken(): boolean {
-  return !!getToken() && !!getApiBase();
+  // An API base is sufficient when the server intentionally runs without
+  // bearer tokens (development/isolated deployments).
+  return !!getApiBase();
 }
 
 // --- API base URL helpers (localStorage) ---
@@ -85,7 +87,10 @@ export async function resolveApiBase(input: string): Promise<string> {
   if (!explicitProtocol && (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) || trimmed.startsWith("//"))) {
     throw new Error("Enter a valid HTTP or HTTPS API endpoint.");
   }
-  const candidates = explicitProtocol ? [trimmed] : [`https://${trimmed}`, `http://${trimmed}`];
+  const localHost = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?(?:\/|$)/i.test(trimmed);
+  // Never silently downgrade a public endpoint and later send its bearer
+  // token over cleartext HTTP. Local loopback remains convenient for dev.
+  const candidates = explicitProtocol ? [trimmed] : [localHost ? `http://${trimmed}` : `https://${trimmed}`];
   let validCandidate = false;
 
   for (const candidate of candidates) {

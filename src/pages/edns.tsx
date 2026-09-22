@@ -206,16 +206,20 @@ function EdnsPageContent() {
     setDeleting(true);
     try {
       let deleted = 0;
+      const failed: number[] = [];
       for (const id of deleteIds) {
         try {
           const result = await deleteEdns({ id });
           deleted += result.deleted;
         } catch {
-          // continue
+          failed.push(id);
         }
       }
-      showToast(`Deleted ${deleted} EDNS record(s)`, "success");
-      setSelectedIds(new Set());
+      showToast(
+        failed.length > 0 ? `Deleted ${deleted} EDNS record(s); ${failed.length} failed` : `Deleted ${deleted} EDNS record(s)`,
+        failed.length > 0 ? "error" : "success"
+      );
+      setSelectedIds(new Set(failed));
       await fetchData();
       setDeleteOpen(false);
     } catch (err) {

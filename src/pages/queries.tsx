@@ -228,18 +228,22 @@ export default function QueriesPage() {
     try {
       if (deleteTarget.type === "id" && deleteTarget.ids) {
         let deleted = 0;
+        const failed: number[] = [];
         for (const id of deleteTarget.ids) {
           try {
             const result = await deleteQueryById(id);
             deleted += result.deleted;
           } catch {
-            // continue with other deletions
+            failed.push(id);
           }
         }
         showToast(
-          `Deleted ${deleted} query record${deleted !== 1 ? "s" : ""}`,
-          "success"
+          failed.length > 0
+            ? `Deleted ${deleted} query record${deleted !== 1 ? "s" : ""}; ${failed.length} failed`
+            : `Deleted ${deleted} query record${deleted !== 1 ? "s" : ""}`,
+          failed.length > 0 ? "error" : "success"
         );
+        setSelectedIds(new Set(failed));
       } else if (deleteTarget.type === "domain" && deleteTarget.domain) {
         const result = await deleteQueries({ domain: deleteTarget.domain });
         showToast(
@@ -247,7 +251,7 @@ export default function QueriesPage() {
           "success"
         );
       }
-      setSelectedIds(new Set());
+      if (deleteTarget.type !== "id") setSelectedIds(new Set());
       await fetchQueries();
       setDeleteOpen(false);
     } catch (err) {

@@ -40,16 +40,12 @@ export default function TokenDialog() {
       toast.warning(messages.endpointRequired);
       return;
     }
-    if (!trimmed) {
-      toast.warning(messages.tokenRequired);
-      return;
-    }
-
     setLoading(true);
 
     try {
       if (needsEndpoint) setApiBase(await resolveApiBase(endpoint));
-      setToken(trimmed);
+      if (trimmed) setToken(trimmed);
+      else removeToken();
       await getStats();
       window.location.reload();
     } catch (err) {
@@ -64,7 +60,7 @@ export default function TokenDialog() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && token.trim() && (!needsEndpoint || endpoint.trim()) && !loading) {
+    if (e.key === "Enter" && (!needsEndpoint || endpoint.trim()) && !loading) {
       handleSave();
     }
   };
