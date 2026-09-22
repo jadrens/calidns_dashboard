@@ -39,6 +39,7 @@ import {
   Tabs,
   Tab,
   useTheme,
+	useMediaQuery,
 } from "@mui/material";
 import { Snackbar } from "../toast";
 import AddIcon from "@mui/icons-material/Add";
@@ -116,6 +117,7 @@ function emptyZone(): Zone {
 
 export default function ZonesPage() {
   const theme = useTheme();
+	const compactActions = useMediaQuery(theme.breakpoints.down("md"));
   const messages = useDnsMessages();
   useDocumentTitle(messages.zoneManagement);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -503,21 +505,16 @@ export default function ZonesPage() {
       <TextField
         select
         label={messages.matchMode}
-        value={editingZone.mode ?? ""}
+        value={editingZone.mode}
         onChange={(e) => setEditingZone({
           ...editingZone,
-          mode: (e.target.value || undefined) as Zone["mode"],
+          mode: e.target.value as Zone["mode"],
         })}
         fullWidth
-        helperText={editingZone.mode === "simple"
-          ? messages.simpleModeHelp
-          : editingZone.mode === "golang"
-            ? messages.golangModeHelp
-            : messages.legacyModeHelp}
+        helperText={editingZone.mode === "simple" ? messages.simpleModeHelp : messages.golangModeHelp}
       >
         <MenuItem value="simple">{messages.simpleMode}</MenuItem>
         <MenuItem value="golang">{messages.golangMode}</MenuItem>
-        <MenuItem value="">{messages.legacyMode}</MenuItem>
       </TextField>
 
       <TextField
@@ -531,11 +528,7 @@ export default function ZonesPage() {
             sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
           },
         }}
-        helperText={editingZone.mode === "simple"
-          ? messages.simpleModeHelp
-          : editingZone.mode === "golang"
-            ? messages.golangModeHelp
-            : messages.legacyModeHelp}
+        helperText={editingZone.mode === "simple" ? messages.simpleModeHelp : messages.golangModeHelp}
       />
 
       <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
@@ -862,7 +855,7 @@ export default function ZonesPage() {
                       {zone.pattern}
                     </Typography>
                     <Chip
-                      label={zone.mode === "simple" ? messages.simpleMode : zone.mode === "golang" ? messages.golangMode : messages.legacyMode}
+                      label={zone.mode === "simple" ? messages.simpleMode : messages.golangMode}
                       size="small"
                       variant="outlined"
                       sx={{ flexShrink: 0 }}
@@ -870,16 +863,55 @@ export default function ZonesPage() {
                   </Box>
                   <ExpandMoreIcon sx={{ ml: 1, transform: expandedPattern === zone.pattern ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
                 </ButtonBase>
-                <IconButton
-                  size="small"
-                  aria-label={`More actions for ${zone.pattern}`}
-                  onClick={(event) => {
-                    setZoneMenuAnchor(event.currentTarget);
-                    setZoneMenuTarget(zone);
-                  }}
-                >
-                  <MoreVertIcon />
-                </IconButton>
+				{compactActions ? (
+				  <IconButton
+				    size="small"
+				    aria-label={`More actions for ${zone.pattern}`}
+				    onClick={(event) => {
+				      setZoneMenuAnchor(event.currentTarget);
+				      setZoneMenuTarget(zone);
+				    }}
+				  >
+				    <MoreVertIcon />
+				  </IconButton>
+				) : (
+				  <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+				    <Tooltip title={messages.copyPattern}>
+				      <IconButton size="small" aria-label={`${messages.copyPattern}: ${zone.pattern}`} onClick={() => void copyPattern(zone.pattern)}>
+				        <ContentCopyIcon fontSize="small" />
+				      </IconButton>
+				    </Tooltip>
+				    <Tooltip title={`${messages.recordQueries}: ${zone.record ? messages.on : messages.off}`}>
+				      <span>
+				        <IconButton
+				          size="small"
+				          aria-label={`${messages.recordQueries}: ${zone.record ? messages.on : messages.off}`}
+				          disabled={updatingPattern === zone.pattern || (saving && editingPattern === zone.pattern)}
+				          onClick={() => void toggleZoneSetting(zone, "record")}
+				        >
+				          <FiberManualRecordIcon fontSize="small" sx={{ color: zone.record ? "success.main" : "text.disabled" }} />
+				        </IconButton>
+				      </span>
+				    </Tooltip>
+				    <Tooltip title={`${messages.fastOpen}: ${zone.fast_open ? messages.on : messages.off}`}>
+				      <span>
+				        <IconButton
+				          size="small"
+				          aria-label={`${messages.fastOpen}: ${zone.fast_open ? messages.on : messages.off}`}
+				          disabled={updatingPattern === zone.pattern || (saving && editingPattern === zone.pattern)}
+				          onClick={() => void toggleZoneSetting(zone, "fast_open")}
+				        >
+				          <BoltIcon fontSize="small" sx={{ color: zone.fast_open ? "warning.main" : "text.disabled" }} />
+				        </IconButton>
+				      </span>
+				    </Tooltip>
+				    <Tooltip title={messages.deleteZone}>
+				      <IconButton size="small" color="error" aria-label={`${messages.deleteZone}: ${zone.pattern}`} onClick={() => confirmDeleteZone(zone)}>
+				        <DeleteIcon fontSize="small" />
+				      </IconButton>
+				    </Tooltip>
+				  </Box>
+				)}
               </Box>
               <Collapse in={expandedPattern === zone.pattern} unmountOnExit>
               <Box sx={{ px: { xs: 2, sm: 3 }, pt: 1, pb: 2 }}>

@@ -21,7 +21,7 @@ export interface ZoneCountries {
 export interface Zone {
   pattern: string;
   regex: string;
-  mode?: "simple" | "golang";
+  mode: "simple" | "golang";
   countries: ZoneCountries;
   ttl: number;
   record: boolean;
@@ -150,4 +150,59 @@ export interface ServerConfigUpdate {
 
 export interface ServerConfigResponse {
   status: string;
+}
+
+export interface ClusterSnapshot {
+  hash: string;
+  record_count: number;
+  updated_at: string;
+}
+
+export interface ClusterSyncStatus {
+  success: boolean;
+  full_sync: boolean;
+  changed: boolean;
+  checked_at: string;
+  last_success_at?: string;
+  duration_ms: number;
+  master_hash?: string;
+  record_count: number;
+  error?: string;
+}
+
+export interface ClusterPeerStatus {
+  address: string;
+  online: boolean;
+  checked_at?: string;
+  duration_ms: number;
+  error?: string;
+}
+
+export interface ClusterStatus {
+  mode: "master" | "slave" | "";
+  snapshot: ClusterSnapshot;
+  master?: string;
+  sync?: ClusterSyncStatus;
+  slaves?: ClusterPeerStatus[];
+  online: number;
+  total: number;
+  interval: string;
+}
+
+export interface ClusterEvent {
+  kind: "sync" | "health";
+  peer?: string;
+  success: boolean;
+  full_sync?: boolean;
+  changed?: boolean;
+  occurred_at: string;
+  duration_ms: number;
+  hash?: string;
+  record_count?: number;
+  error?: string;
+}
+
+export interface ClusterHistory {
+  mode: "master" | "slave" | "";
+  events: ClusterEvent[];
 }

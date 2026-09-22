@@ -18,6 +18,12 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions,
+	Chip,
+	Divider,
 } from "@mui/material";
 import { Snackbar } from "../toast";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -26,11 +32,17 @@ import ErrorIcon from "@mui/icons-material/Error";
 import CachedIcon from "@mui/icons-material/Cached";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import BarChartIcon from "@mui/icons-material/BarChart";
+import HubIcon from "@mui/icons-material/Hub";
 import { alpha } from "@mui/material";
-import { hasToken, getApiBase, getStats, checkHealth, getServerConfig, updateServerConfig } from "../lib/api";
-import type { StatsResponse, ServerConfig } from "../lib/types";
+import { hasToken, getApiBase, getStats, checkHealth, getServerConfig, updateServerConfig, getClusterStatus, getClusterHistory } from "../lib/api";
+import type { StatsResponse, ServerConfig, ClusterStatus, ClusterHistory } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { useDnsMessages } from "../i18n";
+
+function formatClusterTime(value?: string) {
+	if (!value || value.startsWith("0001-")) return "-";
+	return new Date(value).toLocaleString();
+}
 
 export default function DnsManagerDashboard() {
   const theme = useTheme();
@@ -39,6 +51,10 @@ export default function DnsManagerDashboard() {
   const [health, setHealth] = useState<boolean | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+	const [clusterStatus, setClusterStatus] = useState<ClusterStatus | null>(null);
+	const [clusterHistory, setClusterHistory] = useState<ClusterHistory | null>(null);
+	const [clusterDialogOpen, setClusterDialogOpen] = useState(false);
+	const [clusterHistoryLoading, setClusterHistoryLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savingConfig, setSavingConfig] = useState(false);
@@ -50,14 +66,16 @@ export default function DnsManagerDashboard() {
     setError("");
 
     try {
-      const [h, s, cfg] = await Promise.all([
+		const [h, s, cfg, cluster] = await Promise.all([
         checkHealth().then(() => true).catch(() => false),
         getStats().catch(() => null),
         getServerConfig().catch(() => null),
+		getClusterStatus().catch(() => null),
       ]);
       setHealth(h);
       setStats(s as StatsResponse | null);
       setServerConfig(cfg as ServerConfig | null);
+		setClusterStatus(cluster as ClusterStatus | null);
     } catch {
       setError("Failed to fetch data from the DNS server");
     } finally {
@@ -65,9 +83,31 @@ export default function DnsManagerDashboard() {
     }
   }, []);
 
+	const openClusterDetails = async () => {
+		setClusterDialogOpen(true);
+		setClusterHistoryLoading(true);
+		try {
+			const [status, history] = await Promise.all([getClusterStatus(), getClusterHistory()]);
+			setClusterStatus(status);
+			setClusterHistory(history);
+		} catch {
+			setClusterHistory(null);
+		} finally {
+			setClusterHistoryLoading(false);
+		}
+	};
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+	useEffect(() => {
+		if (!hasToken()) return;
+		const timer = window.setInterval(() => {
+			void getClusterStatus().then(setClusterStatus).catch(() => undefined);
+		}, 60_000);
+		return () => window.clearInterval(timer);
+	}, []);
 
   const handleSaveConfig = async () => {
     if (!serverConfig) return;
@@ -85,6 +125,21 @@ export default function DnsManagerDashboard() {
       setSavingConfig(false);
     }
   };
+
+	const clusterTone = clusterStatus?.mode === "master"
+		? clusterStatus.total === 0 || clusterStatus.online === clusterStatus.total
+			? theme.palette.success.main
+			: clusterStatus.online === 0
+				? theme.palette.error.main
+				: theme.palette.warning.main
+		: clusterStatus?.mode === "slave" && clusterStatus.sync?.success
+			? theme.palette.success.main
+			: theme.palette.error.main;
+	const clusterSummary = clusterStatus?.mode === "master"
+		? `${clusterStatus.online}/${clusterStatus.total} ${messages.onlineSlaves}`
+		: clusterStatus?.mode === "slave"
+			? (clusterStatus.sync?.success ? messages.syncSucceeded : messages.syncFailed)
+			: messages.standaloneRole;
 
   if (!hasToken()) {
     return (
@@ -204,6 +259,41 @@ export default function DnsManagerDashboard() {
             </CardContent>
           </Card>
         </Grid>
+
+		{/* Cluster status */}
+		{clusterStatus && clusterStatus.mode !== "" && (
+		  <Grid size={{ xs: 12 }}>
+		    <Card
+		      component="button"
+		      type="button"
+		      onClick={() => void openClusterDetails()}
+		      elevation={0}
+		      sx={{
+		        width: "100%",
+		        color: "inherit",
+		        textAlign: "left",
+		        cursor: "pointer",
+		        border: 1,
+		        borderColor: alpha(clusterTone, 0.55),
+		        borderRadius: 2,
+		        bgcolor: alpha(clusterTone, 0.055),
+		        "&:hover": { bgcolor: alpha(clusterTone, 0.1) },
+		      }}
+		    >
+		      <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, py: 2.25, "&:last-child": { pb: 2.25 } }}>
+		        <HubIcon sx={{ fontSize: 38, color: clusterTone }} />
+		        <Box sx={{ flex: 1, minWidth: 0 }}>
+		          <Typography variant="overline" color="text.secondary">{messages.clusterStatus}</Typography>
+		          <Typography variant="h6" sx={{ fontWeight: 700 }}>{clusterSummary}</Typography>
+		          <Typography variant="caption" color="text.secondary" noWrap>
+		            {clusterStatus.mode === "master" ? messages.masterRole : `${messages.slaveRole} · ${clusterStatus.master ?? "-"}`}
+		          </Typography>
+		        </Box>
+		        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: clusterTone, boxShadow: `0 0 0 5px ${alpha(clusterTone, 0.15)}` }} />
+		      </CardContent>
+		    </Card>
+		  </Grid>
+		)}
 
         {/* Total queries */}
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -448,6 +538,62 @@ export default function DnsManagerDashboard() {
           </CardContent>
         </Card>
       )}
+
+	  <Dialog open={clusterDialogOpen} onClose={() => setClusterDialogOpen(false)} maxWidth="md" fullWidth>
+		<DialogTitle sx={{ fontWeight: 700 }}>{messages.clusterDetails}</DialogTitle>
+		<DialogContent dividers>
+		  {clusterStatus?.mode === "master" ? (
+		    <Box sx={{ display: "grid", gap: 1 }}>
+		      {(clusterStatus.slaves ?? []).map((peer) => (
+		        <Box key={peer.address} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 1.5, border: 1, borderColor: "divider", borderRadius: 2 }}>
+		          <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: peer.online ? "success.main" : "error.main" }} />
+		          <Box sx={{ flex: 1, minWidth: 0 }}>
+		            <Typography sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontWeight: 600 }} noWrap>{peer.address}</Typography>
+		            <Typography variant="caption" color="text.secondary">{formatClusterTime(peer.checked_at)} · {peer.duration_ms}ms</Typography>
+		            {peer.error && <Typography variant="caption" color="error.main" sx={{ display: "block" }}>{peer.error}</Typography>}
+		          </Box>
+		          <Chip size="small" color={peer.online ? "success" : "error"} label={peer.online ? messages.online : messages.offline} />
+		        </Box>
+		      ))}
+		    </Box>
+		  ) : clusterStatus?.mode === "slave" ? (
+		    <Box sx={{ display: "grid", gap: 1 }}>
+		      <Typography><strong>{messages.masterRole}:</strong> {clusterStatus.master}</Typography>
+		      <Typography><strong>{messages.lastSync}:</strong> {formatClusterTime(clusterStatus.sync?.checked_at)}</Typography>
+		      <Typography><strong>{messages.recordCount}:</strong> {clusterStatus.sync?.record_count ?? clusterStatus.snapshot.record_count}</Typography>
+		      <Box><Chip size="small" color={clusterStatus.sync?.success ? "success" : "error"} label={clusterStatus.sync?.success ? messages.syncSucceeded : messages.syncFailed} /></Box>
+		      {clusterStatus.sync?.error && <Alert severity="error">{clusterStatus.sync.error}</Alert>}
+		    </Box>
+		  ) : null}
+
+		  <Divider sx={{ my: 2.5 }} />
+		  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>{messages.checkHistory}</Typography>
+		  {clusterHistoryLoading ? (
+		    <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}><CircularProgress size={28} /></Box>
+		  ) : !clusterHistory?.events.length ? (
+		    <Typography color="text.secondary">{messages.noClusterHistory}</Typography>
+		  ) : (
+		    <Box sx={{ display: "grid", gap: 1, maxHeight: 360, overflowY: "auto" }}>
+		      {clusterHistory.events.map((event, index) => (
+		        <Box key={`${event.occurred_at}-${event.peer}-${index}`} sx={{ display: "flex", gap: 1.5, p: 1.25, borderBottom: 1, borderColor: "divider" }}>
+		          <Box sx={{ mt: 0.75, width: 9, height: 9, flexShrink: 0, borderRadius: "50%", bgcolor: event.success ? "success.main" : "error.main" }} />
+		          <Box sx={{ minWidth: 0 }}>
+		            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+		              {event.peer || (event.kind === "sync" ? clusterStatus?.master : "-")}
+		            </Typography>
+		            <Typography variant="caption" color="text.secondary">
+		              {formatClusterTime(event.occurred_at)} · {event.duration_ms}ms
+		              {event.full_sync ? ` · ${messages.fullSync}` : event.kind === "sync" ? ` · ${messages.noChange}` : ""}
+		            </Typography>
+		            {event.error && <Typography variant="caption" color="error.main" sx={{ display: "block" }}>{event.error}</Typography>}
+		          </Box>
+		        </Box>
+		      ))}
+		    </Box>
+		  )}
+		</DialogContent>
+		<DialogActions><Button onClick={() => setClusterDialogOpen(false)}>{messages.close}</Button></DialogActions>
+	  </Dialog>
 
       {/* Toast */}
       <Snackbar

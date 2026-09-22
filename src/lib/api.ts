@@ -17,6 +17,8 @@ import type {
   GeoCacheDeleteResponse,
   EdnsListResponse,
   EdnsDeleteResponse,
+	ClusterStatus,
+	ClusterHistory,
 } from "./types";
 
 const STORAGE_KEY_TOKEN = "dns-manager-token";
@@ -164,6 +166,16 @@ export async function checkHealth(): Promise<HealthResponse> {
 /** GET /api/stats */
 export async function getStats(): Promise<StatsResponse> {
   return apiFetch<StatsResponse>("/api/stats");
+}
+
+/** GET /api/cluster/status — role-aware cluster summary */
+export async function getClusterStatus(): Promise<ClusterStatus> {
+  return apiFetch<ClusterStatus>("/api/cluster/status", { cache: "no-store" });
+}
+
+/** GET /api/cluster/history — bounded process-local check history */
+export async function getClusterHistory(): Promise<ClusterHistory> {
+  return apiFetch<ClusterHistory>("/api/cluster/history", { cache: "no-store" });
 }
 
 /** GET /api/server — get server default config */
