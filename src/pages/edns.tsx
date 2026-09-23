@@ -162,7 +162,7 @@ function EdnsPageContent() {
 
   const handleQuickTime = (hoursAgo: number) => {
     const d = new Date(Date.now() - hoursAgo * 3600000);
-    setStartTime(d.toISOString().slice(0, 16));
+    setStartTime(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     setEndTime("");
     setPage(1);
     setTimeMenuAnchor(null);

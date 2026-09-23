@@ -3,6 +3,7 @@ import {
   ApiEndpointConnectionError,
   getStats,
   hasToken,
+  listQueries,
   removeToken,
   resolveApiBase,
   setApiBase,
@@ -63,6 +64,20 @@ describe("DNS API authentication", () => {
     await getStats();
     expect(sentHeaders.get("Authorization")).toBe("Bearer secret-token");
     expect(sentHeaders.get("Content-Type")).toBe("application/json");
+  });
+
+  test("normalizes query time filters to UTC", async () => {
+    installBrowserStorage();
+    setApiBase("https://dns.example.test");
+    setToken("secret-token");
+    let requestURL = "";
+    mockFetch(async (input) => {
+      requestURL = String(input);
+      return new Response(JSON.stringify({ total: 0, items: [] }), { status: 200 });
+    });
+
+    await listQueries({ start: "2026-09-24T12:25:26+09:00" });
+    expect(new URL(requestURL).searchParams.get("start")).toBe("2026-09-24T03:25:26.000Z");
   });
 });
 

@@ -66,6 +66,11 @@ function normalizeApiBase(url: string): string {
   return parsed.toString().replace(/\/+$/, "");
 }
 
+function utcTimeParam(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+}
+
 export function setApiBase(url: string): void {
   const normalized = normalizeApiBase(url);
   if (typeof window === "undefined") return;
@@ -253,8 +258,8 @@ export async function listQueries(
   if (params.ip) search.set("ip", params.ip);
   if (params.subnet) search.set("subnet", params.subnet);
   if (params.server_hostname) search.set("server_hostname", params.server_hostname);
-  if (params.start) search.set("start", params.start);
-  if (params.end) search.set("end", params.end);
+  if (params.start) search.set("start", utcTimeParam(params.start));
+  if (params.end) search.set("end", utcTimeParam(params.end));
   if (params.limit != null) search.set("limit", String(params.limit));
   if (params.offset != null) search.set("offset", String(params.offset));
   const qs = search.toString();
@@ -281,8 +286,8 @@ export async function deleteQueries(
   if (params.ip) search.set("ip", params.ip);
   if (params.subnet) search.set("subnet", params.subnet);
   if (params.server_hostname) search.set("server_hostname", params.server_hostname);
-  if (params.start) search.set("start", params.start);
-  if (params.end) search.set("end", params.end);
+  if (params.start) search.set("start", utcTimeParam(params.start));
+  if (params.end) search.set("end", utcTimeParam(params.end));
   const qs = search.toString();
   return apiFetch<QueryDeleteResponse>(
     `/api/queries${qs ? `?${qs}` : ""}`,
@@ -356,8 +361,8 @@ export async function listEdns(
   if (params.subnet) search.set("subnet", params.subnet);
   if (params.country_code) search.set("country_code", params.country_code);
   if (params.nsid) search.set("nsid", params.nsid);
-  if (params.start) search.set("start", params.start);
-  if (params.end) search.set("end", params.end);
+  if (params.start) search.set("start", utcTimeParam(params.start));
+  if (params.end) search.set("end", utcTimeParam(params.end));
   if (params.limit != null) search.set("limit", String(params.limit));
   if (params.offset != null) search.set("offset", String(params.offset));
   const qs = search.toString();
@@ -375,8 +380,8 @@ export async function deleteEdns(
   if (params.subnet) search.set("subnet", params.subnet);
   if (params.country_code) search.set("country_code", params.country_code);
   if (params.nsid) search.set("nsid", params.nsid);
-  if (params.start) search.set("start", params.start);
-  if (params.end) search.set("end", params.end);
+  if (params.start) search.set("start", utcTimeParam(params.start));
+  if (params.end) search.set("end", utcTimeParam(params.end));
   const qs = search.toString();
   return apiFetch<EdnsDeleteResponse>(
     `/api/edns${qs ? `?${qs}` : ""}`,

@@ -167,7 +167,7 @@ export default function QueriesPage() {
 
   const handleQuickTime = (hoursAgo: number) => {
     const d = new Date(Date.now() - hoursAgo * 3600000);
-    const value = d.toISOString().slice(0, 16);
+    const value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setStartTime(value);
     setEndTime("");
     setPage(1);
@@ -661,7 +661,20 @@ export default function QueriesPage() {
               overflow: "auto",
             }}
           >
-            <Table size="small">
+            <Table
+              size="small"
+              sx={{
+                tableLayout: "fixed",
+                minWidth: 1260,
+                "& th, & td": {
+                  px: 1,
+                  py: 0.65,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                },
+              }}
+            >
               <TableHead>
                 <TableRow
                   sx={{
@@ -679,6 +692,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 72,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -688,6 +702,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 175,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -697,6 +712,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 78,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -706,6 +722,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 140,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -715,6 +732,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 120,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -724,6 +742,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 76,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -733,6 +752,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 105,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -742,6 +762,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 88,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -751,6 +772,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 165,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -760,6 +782,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 92,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -769,6 +792,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 74,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -778,6 +802,7 @@ export default function QueriesPage() {
                   </TableCell>
                   <TableCell
                     sx={{
+                      width: 170,
                       fontWeight: 700,
                       fontFamily: "var(--font-jetbrains-mono), monospace",
                       fontSize: "0.8rem",
@@ -826,11 +851,13 @@ export default function QueriesPage() {
                       sx={{
                         fontFamily: "var(--font-jetbrains-mono), monospace",
                         fontSize: "0.8rem",
-                        wordBreak: "break-all",
-                        maxWidth: 200,
                       }}
                     >
-                      {item.domain}
+                      <Tooltip title={item.domain} placement="top">
+                        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {item.domain}
+                        </span>
+                      </Tooltip>
                     </TableCell>
                     <TableCell
                       sx={{
@@ -873,7 +900,11 @@ export default function QueriesPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {item.server_hostname || "-"}
+                      <Tooltip title={item.server_hostname || ""} placement="top">
+                        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {item.server_hostname || "-"}
+                        </span>
+                      </Tooltip>
                     </TableCell>
                     <TableCell
                       sx={{
