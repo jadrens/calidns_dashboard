@@ -1,7 +1,31 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { ApiEndpointConnectionError, resolveApiBase } from "./api";
+import {
+  ApiEndpointConnectionError,
+  getStats,
+  hasToken,
+  removeToken,
+  resolveApiBase,
+  setApiBase,
+  setToken,
+} from "./api";
 
 const originalFetch = globalThis.fetch;
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+
+function installBrowserStorage() {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, String(value)),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+    key: (index: number) => Array.from(values.keys())[index] ?? null,
+    get length() { return values.size; },
+  };
+  Object.defineProperty(globalThis, "window", { configurable: true, value: globalThis });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+}
 
 function mockFetch(handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
   globalThis.fetch = Object.assign(handler, { preconnect: originalFetch.preconnect }) as typeof fetch;
@@ -9,6 +33,37 @@ function mockFetch(handler: (input: RequestInfo | URL, init?: RequestInit) => Pr
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+  else delete (globalThis as { window?: unknown }).window;
+  if (originalLocalStorage) Object.defineProperty(globalThis, "localStorage", originalLocalStorage);
+  else delete (globalThis as { localStorage?: unknown }).localStorage;
+});
+
+describe("DNS API authentication", () => {
+  test("requires a real token instead of treating the endpoint as authentication", () => {
+    installBrowserStorage();
+    setApiBase("https://dns.example.test");
+    expect(hasToken()).toBe(false);
+    setToken(" secret-token ");
+    expect(hasToken()).toBe(true);
+    removeToken();
+    expect(hasToken()).toBe(false);
+  });
+
+  test("sends the trimmed bearer token on API requests", async () => {
+    installBrowserStorage();
+    setApiBase("https://dns.example.test");
+    setToken(" secret-token ");
+    let sentHeaders = new Headers();
+    mockFetch(async (_input, init) => {
+      sentHeaders = new Headers(init?.headers);
+      return new Response(JSON.stringify({ zones: 0, recorder: { enabled: false } }), { status: 200 });
+    });
+
+    await getStats();
+    expect(sentHeaders.get("Authorization")).toBe("Bearer secret-token");
+    expect(sentHeaders.get("Content-Type")).toBe("application/json");
+  });
 });
 
 describe("DNS API endpoint resolution", () => {

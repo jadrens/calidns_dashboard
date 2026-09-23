@@ -87,9 +87,14 @@ export default function GeocachePage() {
       });
       setEntries(data.entries || []);
       setTotal(data.total);
-    } catch {
+    } catch (error) {
       setEntries([]);
       setTotal(0);
+      setToast({
+        open: true,
+        message: error instanceof Error ? error.message : "Failed to load geo cache",
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }

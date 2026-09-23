@@ -542,6 +542,9 @@ function EdnsPageContent() {
                     {messages.clientIp}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
+                    {messages.serverHostname}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
                     {messages.subnet}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
@@ -622,6 +625,9 @@ function EdnsPageContent() {
                           <ContentCopyIcon sx={{ fontSize: 12 }} />
                         </IconButton>
                       </Box>
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                      {item.server_hostname || "—"}
                     </TableCell>
                     <TableCell sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>

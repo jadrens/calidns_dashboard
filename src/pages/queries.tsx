@@ -58,6 +58,8 @@ export default function QueriesPage() {
   const [searchSubnet, setSearchSubnet] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [searchCountryCode, setSearchCountryCode] = useState("");
+  const [serverHostname, setServerHostname] = useState("");
+  const [searchServerHostname, setSearchServerHostname] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [timeMenuAnchor, setTimeMenuAnchor] = useState<null | HTMLElement>(null);
@@ -102,6 +104,7 @@ export default function QueriesPage() {
         ip: searchClientIp || undefined,
         subnet: searchSubnet || undefined,
         country_code: searchCountryCode || undefined,
+        server_hostname: searchServerHostname || undefined,
         start: startTime || undefined,
         end: endTime || undefined,
         limit: PAGE_SIZE,
@@ -116,7 +119,7 @@ export default function QueriesPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchDomain, searchClientIp, searchSubnet, searchCountryCode, startTime, endTime, page]);
+  }, [searchDomain, searchClientIp, searchSubnet, searchCountryCode, searchServerHostname, startTime, endTime, page]);
 
   useEffect(() => {
     fetchQueries();
@@ -125,13 +128,14 @@ export default function QueriesPage() {
   // Clear selection when page/items change
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, searchDomain, searchClientIp, searchSubnet, searchCountryCode, startTime, endTime]);
+  }, [page, searchDomain, searchClientIp, searchSubnet, searchCountryCode, searchServerHostname, startTime, endTime]);
 
   const handleSearch = () => {
     setSearchDomain(domain.trim());
     setSearchClientIp(clientIp.trim());
     setSearchSubnet(subnet.trim());
     setSearchCountryCode(countryCode.trim());
+    setSearchServerHostname(serverHostname.trim());
     setPage(1);
   };
 
@@ -150,6 +154,8 @@ export default function QueriesPage() {
     setSearchSubnet("");
     setCountryCode("");
     setSearchCountryCode("");
+    setServerHostname("");
+    setSearchServerHostname("");
     setStartTime("");
     setEndTime("");
     setPage(1);
@@ -269,6 +275,7 @@ export default function QueriesPage() {
         ip: searchClientIp || undefined,
         subnet: searchSubnet || undefined,
         country_code: searchCountryCode || undefined,
+        server_hostname: searchServerHostname || undefined,
         start: startTime || undefined,
         end: endTime || undefined,
       });
@@ -431,6 +438,23 @@ export default function QueriesPage() {
               sx={{ flex: { xs: "1 1 100%", sm: "0 0 100px" } }}
             />
             <TextField
+              label={messages.serverHostname}
+              value={serverHostname}
+              onChange={(e) => setServerHostname(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="e.g. ns1.example.com"
+              slotProps={{
+                input: {
+                  sx: {
+                    borderRadius: 2,
+                    fontFamily: "var(--font-jetbrains-mono), monospace",
+                    fontSize: "0.85rem",
+                  },
+                },
+              }}
+              sx={{ flex: { xs: "1 1 100%", sm: "1 1 150px" } }}
+            />
+            <TextField
               label={messages.startTime}
               type="datetime-local"
               value={startTime}
@@ -529,7 +553,7 @@ export default function QueriesPage() {
                   Delete Domain
                 </Button>
               )}
-              {(searchDomain || searchClientIp || searchSubnet || searchCountryCode || startTime || endTime) && (
+              {(searchDomain || searchClientIp || searchSubnet || searchCountryCode || searchServerHostname || startTime || endTime) && (
                 <Button
                   variant="contained"
                   color="error"
@@ -696,6 +720,15 @@ export default function QueriesPage() {
                       fontSize: "0.8rem",
                     }}
                   >
+                    {messages.serverHostname}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: 700,
+                      fontFamily: "var(--font-jetbrains-mono), monospace",
+                      fontSize: "0.8rem",
+                    }}
+                  >
                     {messages.country}
                   </TableCell>
                   <TableCell
@@ -832,6 +865,15 @@ export default function QueriesPage() {
                           <ContentCopyIcon sx={{ fontSize: 12 }} />
                         </IconButton>
                       </Box>
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontFamily: "var(--font-jetbrains-mono), monospace",
+                        fontSize: "0.8rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.server_hostname || "-"}
                     </TableCell>
                     <TableCell
                       sx={{
@@ -1010,6 +1052,9 @@ export default function QueriesPage() {
             )}
             {searchCountryCode && (
               <Chip label={`Country: ${searchCountryCode}`} size="small" variant="outlined" />
+            )}
+            {searchServerHostname && (
+              <Chip label={`Host: ${searchServerHostname}`} size="small" variant="outlined" />
             )}
             {startTime && (
               <Chip label={`Start: ${startTime}`} size="small" variant="outlined" />

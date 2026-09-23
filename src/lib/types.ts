@@ -65,6 +65,7 @@ export interface QueryItem {
   geo_cached?: boolean;
   asn?: string;
   as_name?: string;
+  server_hostname: string;
   edns_subnet?: string;
   edns_country_code?: string;
   edns_city?: string;
@@ -81,6 +82,7 @@ export interface EdnsItem {
   client_ip: string;
   country_code: string;
   city: string;
+  server_hostname: string;
   subnet: string;
   edns_country_code: string;
   edns_city: string;

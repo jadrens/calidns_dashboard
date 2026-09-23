@@ -42,9 +42,7 @@ export function removeToken(): void {
 }
 
 export function hasToken(): boolean {
-  // An API base is sufficient when the server intentionally runs without
-  // bearer tokens (development/isolated deployments).
-  return !!getApiBase();
+  return !!getToken()?.trim();
 }
 
 // --- API base URL helpers (localStorage) ---
@@ -130,19 +128,18 @@ async function apiFetch<T>(
 ): Promise<T> {
   const apiBase = getApiBase();
   if (!apiBase) throw new Error("Set a DNS API endpoint before connecting.");
-  const token = getToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string> | undefined),
-  };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  const token = getToken()?.trim();
+  const headers = new Headers(options.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
-  // Remove so we don't double-merge
-  delete (options as Record<string, unknown>).headers;
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const { headers: _providedHeaders, ...requestOptions } = options;
 
   const res = await fetch(`${apiBase}${path}`, {
-    ...options,
+    ...requestOptions,
     headers,
   });
 
@@ -240,6 +237,7 @@ export interface QueryParams {
   country_code?: string;
   ip?: string;
   subnet?: string;
+  server_hostname?: string;
   start?: string;
   end?: string;
   limit?: number;
@@ -254,6 +252,7 @@ export async function listQueries(
   if (params.country_code) search.set("country_code", params.country_code);
   if (params.ip) search.set("ip", params.ip);
   if (params.subnet) search.set("subnet", params.subnet);
+  if (params.server_hostname) search.set("server_hostname", params.server_hostname);
   if (params.start) search.set("start", params.start);
   if (params.end) search.set("end", params.end);
   if (params.limit != null) search.set("limit", String(params.limit));
@@ -271,6 +270,7 @@ export async function deleteQueries(
     country_code?: string;
     ip?: string;
     subnet?: string;
+    server_hostname?: string;
     start?: string;
     end?: string;
   } = {}
@@ -280,6 +280,7 @@ export async function deleteQueries(
   if (params.country_code) search.set("country_code", params.country_code);
   if (params.ip) search.set("ip", params.ip);
   if (params.subnet) search.set("subnet", params.subnet);
+  if (params.server_hostname) search.set("server_hostname", params.server_hostname);
   if (params.start) search.set("start", params.start);
   if (params.end) search.set("end", params.end);
   const qs = search.toString();
