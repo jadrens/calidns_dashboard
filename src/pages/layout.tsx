@@ -51,31 +51,26 @@ const navItems = [
   {
     key: "dashboard",
     href: "/mtools/dns-manager",
-    label: "Dashboard",
     icon: <DashboardIcon sx={{ fontSize: 20 }} />,
   },
   {
     key: "zones",
     href: "/mtools/dns-manager/zones",
-    label: "Zones",
     icon: <DnsIcon sx={{ fontSize: 20 }} />,
   },
   {
     key: "queries",
     href: "/mtools/dns-manager/queries",
-    label: "Queries",
     icon: <HistoryIcon sx={{ fontSize: 20 }} />,
   },
   {
     key: "edns",
     href: "/mtools/dns-manager/edns",
-    label: "EDNS",
     icon: <PublicIcon sx={{ fontSize: 20 }} />,
   },
   {
     key: "geocache",
     href: "/mtools/dns-manager/geocache",
-    label: "Geo Cache",
     icon: <CachedIcon sx={{ fontSize: 20 }} />,
   },
 ] as const;
@@ -206,7 +201,7 @@ export default function DnsManagerLayout({
             {isMobile ? (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 {preferenceButtons}
-                <IconButton onClick={() => setDrawerOpen(true)} aria-label="Open menu">
+                <IconButton onClick={() => setDrawerOpen(true)} aria-label={messages.openMenu}>
                   <MenuIcon />
                 </IconButton>
               </Box>

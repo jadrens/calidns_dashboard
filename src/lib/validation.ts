@@ -37,27 +37,30 @@ export function isValidIPv6(value: string): boolean {
   return ipv6FullRegex.test(stripped);
 }
 
+/** Error codes returned for invalid record values; callers render them via i18n. */
+export type RecordValueError = "invalidIPv4" | "invalidIPv6";
+
 /**
  * Validates a record value based on its record type.
- * Returns an error message string if invalid, or null if valid.
+ * Returns an error code if invalid, or null if valid.
  * Non-IP types are validated authoritatively by the DNS API.
  */
 export function validateRecordValue(
   type: string,
   value: string
-): string | null {
+): RecordValueError | null {
   const trimmed = value.trim();
   if (!trimmed) return null; // empty is allowed (will be filtered on save)
 
   switch (type) {
     case "a":
       if (!isValidIPv4(trimmed)) {
-        return `Invalid IPv4 address: "${trimmed}"`;
+        return "invalidIPv4";
       }
       break;
     case "aaaa":
       if (!isValidIPv6(trimmed)) {
-        return `Invalid IPv6 address: "${trimmed}"`;
+        return "invalidIPv6";
       }
       break;
     default:

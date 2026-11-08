@@ -41,21 +41,25 @@ import Link from "../Link";
 import { hasToken, listEdns, deleteEdns } from "../lib/api";
 import type { EdnsItem } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
-import { useDnsMessages } from "../i18n";
+import { useDnsMessages, formatMessage } from "../i18n";
+
+// Only called from event handlers; kept outside the component for the purity lint.
+const currentTime = () => Date.now();
 
 const PAGE_SIZE = 20;
-
-const QUICK_TIMES = [
-  { label: "1h ago", hours: 1 },
-  { label: "1d ago", hours: 24 },
-  { label: "3d ago", hours: 72 },
-  { label: "1w ago", hours: 168 },
-];
 
 function EdnsPageContent() {
   const theme = useTheme();
   const messages = useDnsMessages();
   useDocumentTitle(messages.ednsRecords);
+
+  const quickTimes = [
+    { label: messages.quickTime1h, hours: 1 },
+    { label: messages.quickTime1d, hours: 24 },
+    { label: messages.quickTime3d, hours: 72 },
+    { label: messages.quickTime1w, hours: 168 },
+  ];
+
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
 
   // Search filters
@@ -111,15 +115,16 @@ function EdnsPageContent() {
       setItems(data.items);
       setTotal(data.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch EDNS records");
+      setError(err instanceof Error ? err.message : messages.failedToFetchEdns);
       setItems([]);
       setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [searchId, searchSubnet, searchCountryCode, searchNsid, startTime, endTime, page]);
+  }, [searchId, searchSubnet, searchCountryCode, searchNsid, startTime, endTime, page, messages]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads data whenever the filters change.
     fetchData();
   }, [fetchData]);
 
@@ -129,6 +134,7 @@ function EdnsPageContent() {
     if (idParam) {
       const num = parseInt(idParam, 10);
       if (!isNaN(num) && num > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- follows the ?id= link parameter.
         setSearchId(num);
       }
     }
@@ -161,7 +167,7 @@ function EdnsPageContent() {
   };
 
   const handleQuickTime = (hoursAgo: number) => {
-    const d = new Date(Date.now() - hoursAgo * 3600000);
+    const d = new Date(currentTime() - hoursAgo * 3600000);
     setStartTime(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     setEndTime("");
     setPage(1);
@@ -170,6 +176,7 @@ function EdnsPageContent() {
 
   // Clear selection on filter/page change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a new result set starts with nothing selected.
     setSelectedIds(new Set());
   }, [page, searchSubnet, searchCountryCode, searchNsid, startTime, endTime, searchId]);
 
@@ -216,14 +223,16 @@ function EdnsPageContent() {
         }
       }
       showToast(
-        failed.length > 0 ? `Deleted ${deleted} EDNS record(s); ${failed.length} failed` : `Deleted ${deleted} EDNS record(s)`,
+        failed.length > 0
+          ? formatMessage(messages.deletedEdnsPartial, { deleted, failed: failed.length })
+          : formatMessage(messages.deletedEdns, { deleted }),
         failed.length > 0 ? "error" : "success"
       );
       setSelectedIds(new Set(failed));
       await fetchData();
       setDeleteOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -240,12 +249,12 @@ function EdnsPageContent() {
         start: startTime || undefined,
         end: endTime || undefined,
       });
-      showToast(`Deleted ${result.deleted} EDNS records matching filter`, "success");
+      showToast(formatMessage(messages.deletedEdnsFiltered, { deleted: result.deleted }), "success");
       setSelectedIds(new Set());
       await fetchData();
       setDeleteFilteredOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete filtered failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteFilteredFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -258,9 +267,9 @@ function EdnsPageContent() {
   const copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast("Copied", "success");
+      showToast(messages.copied, "success");
     } catch {
-      showToast("Failed to copy", "error");
+      showToast(messages.copyFailed, "error");
     }
   };
 
@@ -320,7 +329,7 @@ function EdnsPageContent() {
               value={subnet}
               onChange={(e) => setSubnet(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. 203.0.113.0/24"
+              placeholder={formatMessage(messages.exampleValue, { value: "203.0.113.0/24" })}
               slotProps={{
                 input: {
                   sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
@@ -333,7 +342,7 @@ function EdnsPageContent() {
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. CN"
+              placeholder={formatMessage(messages.exampleValue, { value: "CN" })}
               slotProps={{
                 input: {
                   sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
@@ -346,7 +355,7 @@ function EdnsPageContent() {
               value={nsid}
               onChange={(e) => setNsid(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. hkns"
+              placeholder={formatMessage(messages.exampleValue, { value: "hkns" })}
               slotProps={{
                 input: {
                   sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
@@ -408,7 +417,7 @@ function EdnsPageContent() {
                 {messages.quickTime}
               </Button>
               <Menu anchorEl={timeMenuAnchor} open={Boolean(timeMenuAnchor)} onClose={() => setTimeMenuAnchor(null)}>
-                {QUICK_TIMES.map((qt) => (
+                {quickTimes.map((qt) => (
                   <MenuItem key={qt.label} onClick={() => handleQuickTime(qt.hours)}>
                     {qt.label}
                   </MenuItem>
@@ -446,7 +455,7 @@ function EdnsPageContent() {
             </Button>
           }
         >
-          Filtered by query ID: #{searchId}
+          {formatMessage(messages.filteredByQueryId, { id: searchId })}
         </Alert>
       )}
 
@@ -467,7 +476,7 @@ function EdnsPageContent() {
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {selectedIds.size} record{selectedIds.size !== 1 ? "s" : ""} selected
+            {formatMessage(messages.recordsSelected, { count: selectedIds.size })}
           </Typography>
           <Button
             variant="contained"
@@ -510,7 +519,7 @@ function EdnsPageContent() {
               {messages.noEdns}
             </Typography>
             <Typography variant="body2" color="text.disabled">
-              EDNS records appear when clients send EDNS Client Subnet (ECS) information with their DNS queries
+              {messages.ednsEmptyHint}
             </Typography>
           </CardContent>
         </Card>
@@ -548,16 +557,16 @@ function EdnsPageContent() {
                     {messages.subnet}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
-                    EDNS Country
+                    {messages.ednsCountry}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
-                    EDNS City
+                    {messages.ednsCity}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
-                    EDNS ASN
+                    {messages.ednsAsn}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
-                    EDNS AS Name
+                    {messages.ednsAsName}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
                     NSID
@@ -592,7 +601,7 @@ function EdnsPageContent() {
                       />
                     </TableCell>
                     <TableCell sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}>
-                      <Tooltip title="View in Queries">
+                      <Tooltip title={messages.viewInQueries}>
                         <Button
                           component={Link}
                           href={`/mtools/dns-manager/queries?highlight=${item.id}`}
@@ -667,7 +676,7 @@ function EdnsPageContent() {
                       {formatTime(item.created_at)}
                     </TableCell>
                     <TableCell>
-                      <Tooltip title={`Delete EDNS record #${item.id}`}>
+                      <Tooltip title={formatMessage(messages.deleteEdnsRecord, { id: item.id })}>
                         <IconButton size="small" onClick={() => confirmDelete([item.id])} color="error">
                           <DeleteIcon sx={{ fontSize: 14 }} />
                         </IconButton>
@@ -697,19 +706,18 @@ function EdnsPageContent() {
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete EDNS Record</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteEdnsRecordTitle}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>{deleteIds.length}</strong> EDNS record
-            {deleteIds.length !== 1 ? "s" : ""}?
+            {messages.deleteEdnsConfirmPrefix} <strong>{deleteIds.length}</strong> {messages.deleteEdnsConfirmSuffix}
           </Typography>
           {deleteIds.length === 1 && (
             <Typography variant="body2" sx={{ mt: 0.5, color: "text.secondary", fontFamily: "monospace" }}>
-              ID: {deleteIds[0]}
+              {formatMessage(messages.idValue, { value: deleteIds[0] })}
             </Typography>
           )}
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This action cannot be undone.
+            {messages.cannotUndo}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -723,40 +731,40 @@ function EdnsPageContent() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete"}
+            {deleting ? messages.deletingDots : messages.delete}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete filtered dialog */}
       <Dialog open={deleteFilteredOpen} onClose={() => setDeleteFilteredOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Filtered EDNS Records</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteFilteredEdnsTitle}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>all</strong> EDNS records matching the current filter?
+            {messages.deleteConfirmPrefix}<strong>{messages.all}</strong>{messages.deleteFilteredEdnsSuffix}
           </Typography>
           <Box sx={{ mt: 1.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
             {searchId !== undefined && (
-              <Chip label={`ID: #${searchId}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.idHashValue, { id: searchId })} size="small" variant="outlined" />
             )}
             {searchSubnet && (
-              <Chip label={`Subnet: ${searchSubnet}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterSubnet, { value: searchSubnet })} size="small" variant="outlined" />
             )}
             {searchCountryCode && (
-              <Chip label={`Country: ${searchCountryCode}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterCountry, { value: searchCountryCode })} size="small" variant="outlined" />
             )}
             {searchNsid && (
-              <Chip label={`NSID: ${searchNsid}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterNsid, { value: searchNsid })} size="small" variant="outlined" />
             )}
             {startTime && (
-              <Chip label={`Start: ${startTime}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterStart, { value: startTime })} size="small" variant="outlined" />
             )}
             {endTime && (
-              <Chip label={`End: ${endTime}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterEnd, { value: endTime })} size="small" variant="outlined" />
             )}
           </Box>
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This action cannot be undone.
+            {messages.cannotUndo}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -770,7 +778,7 @@ function EdnsPageContent() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete Filtered"}
+            {deleting ? messages.deletingDots : messages.deleteFiltered}
           </Button>
         </DialogActions>
       </Dialog>

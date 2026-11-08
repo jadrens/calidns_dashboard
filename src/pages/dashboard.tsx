@@ -37,7 +37,7 @@ import { alpha } from "@mui/material";
 import { hasToken, getApiBase, getStats, checkHealth, getServerConfig, updateServerConfig, getClusterStatus, getClusterHistory } from "../lib/api";
 import type { StatsResponse, ServerConfig, ClusterStatus, ClusterHistory } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
-import { useDnsMessages } from "../i18n";
+import { useDnsMessages, formatMessage } from "../i18n";
 
 function formatClusterTime(value?: string) {
 	if (!value || value.startsWith("0001-")) return "-";
@@ -77,11 +77,11 @@ export default function DnsManagerDashboard() {
       setServerConfig(cfg as ServerConfig | null);
 		setClusterStatus(cluster as ClusterStatus | null);
     } catch {
-      setError("Failed to fetch data from the DNS server");
+      setError(messages.failedToFetchData);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [messages.failedToFetchData]);
 
 	const openClusterDetails = async () => {
 		setClusterDialogOpen(true);
@@ -98,6 +98,7 @@ export default function DnsManagerDashboard() {
 	};
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads data whenever the filters change.
     fetchData();
   }, [fetchData]);
 
@@ -118,9 +119,9 @@ export default function DnsManagerDashboard() {
         default_response: serverConfig.default_response,
         default_record: serverConfig.default_record,
       });
-      setToast({ open: true, message: "Server config saved", severity: "success" });
+      setToast({ open: true, message: messages.serverConfigSaved, severity: "success" });
     } catch (err) {
-      setToast({ open: true, message: err instanceof Error ? err.message : "Failed to save config", severity: "error" });
+      setToast({ open: true, message: err instanceof Error ? err.message : messages.failedToSaveConfig, severity: "error" });
     } finally {
       setSavingConfig(false);
     }
@@ -254,7 +255,7 @@ export default function DnsManagerDashboard() {
                 {stats?.zones ?? 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Zones
+                {messages.zones}
               </Typography>
             </CardContent>
           </Card>
@@ -333,7 +334,7 @@ export default function DnsManagerDashboard() {
                   : "-"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Total Queries
+                {messages.totalQueries}
               </Typography>
             </CardContent>
           </Card>
@@ -377,7 +378,7 @@ export default function DnsManagerDashboard() {
                   : "-"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Cache Hited
+                {messages.cacheHited}
               </Typography>
               {stats?.recorder && "cache_hited" in stats.recorder && stats.recorder.total_queries > 0 && (
                 <Typography
@@ -389,7 +390,7 @@ export default function DnsManagerDashboard() {
                     mt: 0.5,
                   }}
                 >
-                  {((stats.recorder.cache_hited / stats.recorder.total_queries) * 100).toFixed(1)}% hit rate
+                  {formatMessage(messages.hitRate, { rate: ((stats.recorder.cache_hited / stats.recorder.total_queries) * 100).toFixed(1) })}
                 </Typography>
               )}
             </CardContent>
@@ -434,7 +435,7 @@ export default function DnsManagerDashboard() {
                   : "-"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Dropped
+                {messages.dropped}
               </Typography>
             </CardContent>
           </Card>
@@ -454,7 +455,7 @@ export default function DnsManagerDashboard() {
         >
           <CardContent sx={{ py: 2.5, px: 3, "&:last-child": { pb: 2.5 } }}>
             <Typography variant="h6" sx={{ fontWeight: 600, fontFamily: "var(--font-inter)", mb: 2 }}>
-              Server Defaults
+              {messages.serverDefaults}
             </Typography>
             <Box
               sx={{
@@ -466,7 +467,7 @@ export default function DnsManagerDashboard() {
             >
               {/* Listen address — read only */}
               <TextField
-                label="Listen Address"
+                label={messages.listenAddress}
                 value={serverConfig.listen}
                 slotProps={{
                   input: {
@@ -479,7 +480,7 @@ export default function DnsManagerDashboard() {
 
               {/* Default TTL */}
               <TextField
-                label="Default TTL (seconds)"
+                label={messages.defaultTtlSeconds}
                 type="number"
                 value={serverConfig.default_ttl}
                 onChange={(e) =>
@@ -495,10 +496,10 @@ export default function DnsManagerDashboard() {
 
               {/* Default response */}
               <FormControl sx={{ minWidth: 160 }}>
-                <InputLabel>Default Response</InputLabel>
+                <InputLabel>{messages.defaultResponse}</InputLabel>
                 <Select
                   value={serverConfig.default_response}
-                  label="Default Response"
+                  label={messages.defaultResponse}
                   onChange={(e) =>
                     setServerConfig({
                       ...serverConfig,
@@ -523,7 +524,7 @@ export default function DnsManagerDashboard() {
                     }
                   />
                 }
-                label="Record by default"
+                label={messages.recordByDefault}
               />
 
               <Button
@@ -532,7 +533,7 @@ export default function DnsManagerDashboard() {
                 disabled={savingConfig}
                 sx={{ textTransform: "none", borderRadius: 2, ml: "auto" }}
               >
-                {savingConfig ? "Saving..." : "Save Config"}
+                {savingConfig ? messages.savingDots : messages.saveConfig}
               </Button>
             </Box>
           </CardContent>

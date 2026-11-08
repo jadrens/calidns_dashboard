@@ -37,7 +37,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import { hasToken, getGeoCache, deleteGeoCache } from "../lib/api";
 import type { GeoCacheEntry } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
-import { useDnsMessages } from "../i18n";
+import { useDnsMessages, formatMessage } from "../i18n";
 
 const PAGE_SIZE = 20;
 
@@ -92,15 +92,16 @@ export default function GeocachePage() {
       setTotal(0);
       setToast({
         open: true,
-        message: error instanceof Error ? error.message : "Failed to load geo cache",
+        message: error instanceof Error ? error.message : messages.failedToLoadGeoCache,
         severity: "error",
       });
     } finally {
       setLoading(false);
     }
-  }, [searchSubnet, searchCountryCode, page]);
+  }, [searchSubnet, searchCountryCode, page, messages]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads data whenever the filters change.
     fetchData();
   }, [fetchData]);
 
@@ -126,6 +127,7 @@ export default function GeocachePage() {
 
   // Clear selection on filter change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a new result set starts with nothing selected.
     setSelectedSubnets(new Set());
   }, [searchSubnet, searchCountryCode, page]);
 
@@ -170,12 +172,12 @@ export default function GeocachePage() {
           // continue
         }
       }
-      showToast(`Deleted ${deleted} cache entr${deleted !== 1 ? "ies" : "y"}`, "success");
+      showToast(formatMessage(messages.deletedCacheEntries, { deleted }), "success");
       setSelectedSubnets(new Set());
       await fetchData();
       setDeleteOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete cache failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteCacheFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -185,11 +187,11 @@ export default function GeocachePage() {
     setDeleting(true);
     try {
       const result = await deleteGeoCache();
-      showToast(`Deleted ${result.deleted} cache entries`, "success");
+      showToast(formatMessage(messages.deletedAllCacheEntries, { deleted: result.deleted }), "success");
       await fetchData();
       setClearAllOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Clear cache failed", "error");
+      showToast(err instanceof Error ? err.message : messages.clearCacheFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -202,12 +204,12 @@ export default function GeocachePage() {
         subnet: searchSubnet || undefined,
         country_code: searchCountryCode || undefined,
       });
-      showToast(`Deleted ${result.deleted} cache entries matching filter`, "success");
+      showToast(formatMessage(messages.deletedCacheEntriesFiltered, { deleted: result.deleted }), "success");
       setSelectedSubnets(new Set());
       await fetchData();
       setDeleteFilteredOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete filtered failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteFilteredFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -220,9 +222,9 @@ export default function GeocachePage() {
   const copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast("Copied", "success");
+      showToast(messages.copied, "success");
     } catch {
-      showToast("Failed to copy", "error");
+      showToast(messages.copyFailed, "error");
     }
   };
 
@@ -280,7 +282,7 @@ export default function GeocachePage() {
               value={subnet}
               onChange={(e) => setSubnet(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. 203.0.113.0/24"
+              placeholder={formatMessage(messages.exampleValue, { value: "203.0.113.0/24" })}
               slotProps={{
                 input: {
                   sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
@@ -293,7 +295,7 @@ export default function GeocachePage() {
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. CN"
+              placeholder={formatMessage(messages.exampleValue, { value: "CN" })}
               slotProps={{
                 input: {
                   sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
@@ -366,7 +368,7 @@ export default function GeocachePage() {
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {selectedSubnets.size} entr{selectedSubnets.size !== 1 ? "ies" : "y"} selected
+            {formatMessage(messages.selectedEntries, { count: selectedSubnets.size })}
           </Typography>
           <Button
             variant="contained"
@@ -402,7 +404,7 @@ export default function GeocachePage() {
               {messages.noCache}
             </Typography>
             <Typography variant="body2" color="text.disabled">
-              Geo cache entries appear when DNS queries are geolocated. Try searching with different filters.
+              {messages.geocacheEmptyHint}
             </Typography>
           </CardContent>
         </Card>
@@ -505,7 +507,7 @@ export default function GeocachePage() {
                     {formatTime(entry.expires_at)}
                   </TableCell>
                   <TableCell>
-                    <Tooltip title="Delete this cache entry">
+                    <Tooltip title={messages.deleteCacheEntry}>
                       <IconButton size="small" onClick={() => confirmDeleteEntry([entry.subnet])} color="error">
                         <DeleteIcon sx={{ fontSize: 14 }} />
                       </IconButton>
@@ -540,11 +542,10 @@ export default function GeocachePage() {
 
       {/* Delete single entry dialog */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Cache Entry</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteCacheEntryTitle}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>{deleteSubnets.length}</strong> cache entr
-            {deleteSubnets.length !== 1 ? "ies" : "y"}?
+            {messages.deleteConfirmPrefix} <strong>{deleteSubnets.length}</strong> {messages.deleteCacheEntrySuffix}
           </Typography>
           {deleteSubnets.length === 1 && (
             <Typography variant="body2" sx={{ mt: 0.5, color: "text.secondary", fontFamily: "monospace" }}>
@@ -552,7 +553,7 @@ export default function GeocachePage() {
             </Typography>
           )}
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Entr{deleteSubnets.length !== 1 ? "ies" : "y"} will be re-created on the next geolocation lookup.
+            {messages.cacheEntryRecreated}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -566,20 +567,20 @@ export default function GeocachePage() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete"}
+            {deleting ? messages.deletingDots : messages.delete}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Clear all dialog */}
       <Dialog open={clearAllOpen} onClose={() => setClearAllOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Clear All Cache</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.clearAllCacheTitle}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>all</strong> geo cache entries?
+            {messages.deleteConfirmPrefix}<strong>{messages.all}</strong>{messages.deleteAllCacheSuffix}
           </Typography>
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This action cannot be undone. All cached geolocation data will be cleared.
+            {messages.clearAllCacheWarning}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -593,28 +594,28 @@ export default function GeocachePage() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Clearing..." : "Clear All"}
+            {deleting ? messages.clearingDots : messages.clearAll}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete filtered dialog */}
       <Dialog open={deleteFilteredOpen} onClose={() => setDeleteFilteredOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Filtered Cache</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteFilteredCacheTitle}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>all</strong> geo cache entries matching the current filter?
+            {messages.deleteConfirmPrefix}<strong>{messages.all}</strong>{messages.deleteFilteredCacheSuffix}
           </Typography>
           <Box sx={{ mt: 1.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
             {searchSubnet && (
-              <Chip label={`Subnet: ${searchSubnet}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterSubnet, { value: searchSubnet })} size="small" variant="outlined" />
             )}
             {searchCountryCode && (
-              <Chip label={`Country: ${searchCountryCode}`} size="small" variant="outlined" />
+              <Chip label={formatMessage(messages.filterCountry, { value: searchCountryCode })} size="small" variant="outlined" />
             )}
           </Box>
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This action cannot be undone.
+            {messages.cannotUndo}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -628,7 +629,7 @@ export default function GeocachePage() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete Filtered"}
+            {deleting ? messages.deletingDots : messages.deleteFiltered}
           </Button>
         </DialogActions>
       </Dialog>

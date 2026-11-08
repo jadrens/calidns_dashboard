@@ -45,6 +45,7 @@ export default function DnsManagerApp({
   useEffect(() => {
     if (!theme_data) {
       const saved = localStorage.getItem("dns-manager-theme");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount.
       setStandaloneTheme(saved === "light" || saved === "dark"
         ? saved : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     }

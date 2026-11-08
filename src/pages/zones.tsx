@@ -38,6 +38,7 @@ import {
   Menu,
   Tabs,
   Tab,
+  Autocomplete,
   useTheme,
 	useMediaQuery,
 } from "@mui/material";
@@ -63,8 +64,8 @@ import {
 import { validateRecordValue } from "../lib/validation";
 import type { Zone, DnsRecordSet, ZoneCountries } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
-import { useDnsMessages } from "../i18n";
-import { getZoneDepthGroup } from "../lib/zoneGrouping";
+import { useDnsMessages, formatMessage } from "../i18n";
+import { getZoneDepthGroup, suggestZoneDomains } from "../lib/zoneGrouping";
 
 type RecordType = keyof DnsRecordSet;
 
@@ -97,6 +98,13 @@ const RECORD_PLACEHOLDERS: Record<RecordType, string> = {
   soa: "ns1.example.com. hostmaster.example.com. 2026092001 3600 900 1209600 300",
   other: "SSHFP 1 1 0123456789abcdef...",
 };
+// Types offered as one-click buttons; the rest live in the "More" menu.
+const QUICK_RECORD_TYPES: readonly RecordType[] = ["a", "aaaa", "cname", "txt"];
+const MORE_RECORD_TYPES = RECORD_TYPES.filter((type) => !QUICK_RECORD_TYPES.includes(type));
+const RECORD_SHORT_LABELS: Record<RecordType, string> = {
+  a: "A", aaaa: "AAAA", txt: "TXT", cname: "CNAME", mx: "MX", ns: "NS",
+  srv: "SRV", caa: "CAA", ptr: "PTR", soa: "SOA", other: "Other",
+};
 const ZONE_DEPTHS = [1, 2, 3, 4] as const;
 
 function emptyRecordSet(): DnsRecordSet {
@@ -120,6 +128,12 @@ export default function ZonesPage() {
 	const compactActions = useMediaQuery(theme.breakpoints.down("md"));
   const messages = useDnsMessages();
   useDocumentTitle(messages.zoneManagement);
+
+  // Record type names stay as-is; only the generic "other" bucket is localised.
+  const recordLabel = (type: RecordType) =>
+    type === "other" ? messages.otherRecordType : RECORD_LABELS[type];
+  const recordShortLabel = (type: RecordType) =>
+    type === "other" ? messages.otherRecordType : RECORD_SHORT_LABELS[type];
   const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -172,6 +186,9 @@ export default function ZonesPage() {
   const [editorError, setEditorError] = useState("");
   const [zoneMenuAnchor, setZoneMenuAnchor] = useState<HTMLElement | null>(null);
   const [zoneMenuTarget, setZoneMenuTarget] = useState<Zone | null>(null);
+  const [recordTypeMenu, setRecordTypeMenu] = useState<{ anchor: HTMLElement; country: string } | null>(null);
+  // Record row (`${country}:${type}:${index}`) to focus after it is added.
+  const [focusRecordKey, setFocusRecordKey] = useState<string | null>(null);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Zone | null>(null);
@@ -193,13 +210,14 @@ export default function ZonesPage() {
       setZones(data.zones);
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch zones");
+      setError(err instanceof Error ? err.message : messages.failedToFetchZones);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [messages.failedToFetchZones]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads data whenever the filters change.
     fetchZones();
   }, [fetchZones]);
 
@@ -231,9 +249,9 @@ export default function ZonesPage() {
       if (editingPattern === zone.pattern) {
         setEditingZone((current) => ({ ...current, [setting]: updated[setting] }));
       }
-      showToast("Zone saved successfully", "success");
+      showToast(messages.zoneSaved, "success");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to save zone", "error");
+      showToast(err instanceof Error ? err.message : messages.zoneSaveFailed, "error");
     } finally {
       setUpdatingPattern(null);
     }
@@ -263,10 +281,16 @@ export default function ZonesPage() {
     // authoritative validation for structured and generic DNS records.
     const errorKey = `${countryCode}:${recordType}:${index}`;
     const err = validateRecordValue(recordType, value);
+    const errorText = err
+      ? formatMessage(
+          err === "invalidIPv4" ? messages.invalidIpv4Address : messages.invalidIpv6Address,
+          { value: value.trim() },
+        )
+      : "";
     setRecordErrors((prev) => {
       const next = { ...prev };
-      if (err) {
-        next[errorKey] = err;
+      if (errorText) {
+        next[errorKey] = errorText;
       } else {
         delete next[errorKey];
       }
@@ -277,6 +301,7 @@ export default function ZonesPage() {
   const addRecordValue = (countryCode: string, recordType: RecordType) => {
     const records = { ...editingZone.countries[countryCode] } as Record<string, string[]>;
     records[recordType] = [...(records[recordType] || []), ""];
+    setFocusRecordKey(`${countryCode}:${recordType}:${records[recordType].length - 1}`);
     setEditingZone({
       ...editingZone,
       countries: { ...editingZone.countries, [countryCode]: records as DnsRecordSet },
@@ -330,13 +355,15 @@ export default function ZonesPage() {
   const handleSave = async () => {
     const zone = editingZone;
     if (!zone.pattern.trim()) {
-      setEditorError("Pattern is required");
+      setEditorError(messages.patternRequired);
       return;
     }
     // Reject empty country codes
     for (const code of Object.keys(zone.countries)) {
       if (!code.trim()) {
-        setEditorError("Country code cannot be empty. Please enter a valid country code (e.g. US)");
+        setEditorError(formatMessage(messages.countryCodeRequired, {
+          example: formatMessage(messages.exampleValue, { value: "US" }),
+        }));
         return;
       }
     }
@@ -344,7 +371,7 @@ export default function ZonesPage() {
     // Check IP validation errors
     const ipErrors = Object.entries(recordErrors).filter(([, err]) => !!err);
     if (ipErrors.length > 0) {
-      setEditorError(`Please fix ${ipErrors.length} invalid IP address(es) before saving`);
+      setEditorError(formatMessage(messages.invalidIpCount, { count: ipErrors.length }));
       return;
     }
 
@@ -392,9 +419,9 @@ export default function ZonesPage() {
         setEditorOpen(false);
         await fetchZones();
       }
-      showToast("Zone saved successfully", "success");
+      showToast(messages.zoneSaved, "success");
     } catch (err) {
-      setEditorError(err instanceof Error ? err.message : "Failed to save zone");
+      setEditorError(err instanceof Error ? err.message : messages.zoneSaveFailed);
     } finally {
       setSaving(false);
     }
@@ -420,15 +447,15 @@ export default function ZonesPage() {
     try {
       if (deleteCountry) {
         await deleteZoneCountry(deleteTarget.pattern, deleteCountry);
-        showToast(`Country "${deleteCountry}" deleted`, "success");
+        showToast(formatMessage(messages.countryDeleted, { country: deleteCountry }), "success");
       } else {
         await deleteZone(deleteTarget.pattern);
-        showToast("Zone deleted", "success");
+        showToast(messages.zoneDeleted, "success");
       }
       setDeleteOpen(false);
       await fetchZones();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -476,7 +503,9 @@ export default function ZonesPage() {
     setBatchDeleteOpen(false);
     setSelectedPatterns(new Set(failed));
     showToast(
-      failed.length > 0 ? `Deleted ${deleted} zone(s); ${failed.length} failed` : `Deleted ${deleted} zone(s)`,
+      failed.length > 0
+        ? formatMessage(messages.deletedZonesPartial, { deleted, failed: failed.length })
+        : formatMessage(messages.deletedZones, { deleted }),
       failed.length > 0 ? "error" : "success"
     );
     await fetchZones();
@@ -489,9 +518,9 @@ export default function ZonesPage() {
   const copyPattern = async (pattern: string) => {
     try {
       await navigator.clipboard.writeText(pattern);
-      showToast("Pattern copied", "success");
+      showToast(messages.patternCopied, "success");
     } catch {
-      showToast("Failed to copy", "error");
+      showToast(messages.copyFailed, "error");
     }
   };
 
@@ -499,6 +528,12 @@ export default function ZonesPage() {
     setZoneMenuAnchor(null);
     setZoneMenuTarget(null);
   };
+
+  const savedPatterns = useMemo(() => zones.map((zone) => zone.pattern), [zones]);
+  const domainSuggestions = useMemo(
+    () => suggestZoneDomains(editingZone.pattern, savedPatterns),
+    [editingZone.pattern, savedPatterns],
+  );
 
   const editorFields = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
@@ -517,23 +552,57 @@ export default function ZonesPage() {
         <MenuItem value="golang">{messages.golangMode}</MenuItem>
       </TextField>
 
-      <TextField
-        label={editingZone.mode === "simple" ? messages.domain : messages.pattern}
-        value={editingZone.pattern}
-        onChange={(e) => setEditingZone({ ...editingZone, pattern: e.target.value, regex: e.target.value })}
-        placeholder={editingZone.mode === "simple" ? "example.com" : "^example\\.com\\.?$"}
-        fullWidth
-        slotProps={{
-          input: {
-            sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
-          },
-        }}
-        helperText={editingZone.mode === "simple" ? messages.simpleModeHelp : messages.golangModeHelp}
-      />
+      {editingZone.mode === "simple" ? (
+        <Autocomplete
+          freeSolo
+          disableClearable
+          options={domainSuggestions}
+          filterOptions={(options) => options}
+          inputValue={editingZone.pattern}
+          onInputChange={(_, value) => setEditingZone((current) => ({ ...current, pattern: value, regex: value }))}
+          renderOption={(props, option) => {
+            const { key, ...optionProps } = props;
+            return (
+              <li key={key} {...optionProps} style={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" }}>
+                {option}
+              </li>
+            );
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label={messages.domain}
+              placeholder="example.com"
+              helperText={messages.simpleModeHelp}
+              slotProps={{
+                ...params.slotProps,
+                input: {
+                  ...params.slotProps.input,
+                  sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
+                },
+              }}
+            />
+          )}
+        />
+      ) : (
+        <TextField
+          label={messages.pattern}
+          value={editingZone.pattern}
+          onChange={(e) => setEditingZone({ ...editingZone, pattern: e.target.value, regex: e.target.value })}
+          placeholder="^example\\.com\\.?$"
+          fullWidth
+          slotProps={{
+            input: {
+              sx: { borderRadius: 2, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem" },
+            },
+          }}
+          helperText={messages.golangModeHelp}
+        />
+      )}
 
       <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
         <TextField
-          label="TTL (seconds)"
+          label={messages.ttlSeconds}
           type="number"
           value={editingZone.ttl}
           onChange={(e) => setEditingZone({ ...editingZone, ttl: parseInt(e.target.value) || 600 })}
@@ -556,11 +625,28 @@ export default function ZonesPage() {
         </>}
       </Box>
 
+      {(editingZone.cname_flatten || Object.values(editingZone.countries).some((records) => (records.cname || []).length > 0)) && (
+        <Box>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={!!editingZone.cname_flatten}
+                onChange={(e) => setEditingZone({ ...editingZone, cname_flatten: e.target.checked })}
+              />
+            }
+            label={messages.cnameFlatten}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", ml: 6.5, mt: -0.5 }}>
+            {messages.cnameFlattenHelp}
+          </Typography>
+        </Box>
+      )}
+
       {/* Countries */}
       <Box>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-            Countries / Records
+            {messages.countriesRecords}
           </Typography>
           <Button size="small" onClick={addCountry} startIcon={<AddIcon />} sx={{ textTransform: "none" }}>
             {messages.addCountry}
@@ -586,7 +672,7 @@ export default function ZonesPage() {
                   value={code}
                   onChange={(e) => updateCountryCode(code, e.target.value)}
                   disabled={code === "default"}
-                  placeholder="e.g. US"
+                  placeholder={formatMessage(messages.exampleValue, { value: "US" })}
                   slotProps={{
                     input: {
                       sx: { borderRadius: 1.5, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" },
@@ -595,7 +681,7 @@ export default function ZonesPage() {
                   sx={{ width: 100 }}
                 />
                 {code !== "default" && (
-                  <Tooltip title={`Remove country "${code}"`}>
+                  <Tooltip title={formatMessage(messages.removeCountry, { country: code })}>
                     <IconButton size="small" onClick={() => removeCountry(code)} color="error">
                       <CloseIcon sx={{ fontSize: 18 }} />
                     </IconButton>
@@ -603,47 +689,100 @@ export default function ZonesPage() {
                 )}
               </Box>
 
-              {RECORD_TYPES.map((type) => (
-                <Box key={type} sx={{ mb: 1 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 600, minWidth: 80, fontFamily: "var(--font-jetbrains-mono), monospace" }}>
-                      {RECORD_LABELS[type]}
-                    </Typography>
-                    <Button
+              {RECORD_TYPES.every((type) => !(records[type] || []).length) && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {messages.noRecords}
+                </Typography>
+              )}
+
+              {RECORD_TYPES.flatMap((type) => (records[type] || []).map((val, i) => {
+                const key = `${code}:${type}:${i}`;
+                return (
+                  <Box key={key} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+                    <Chip
+                      label={recordShortLabel(type)}
                       size="small"
                       variant="outlined"
-                      onClick={() => addRecordValue(code, type)}
-                      sx={{ textTransform: "none", fontSize: "0.7rem", py: 0, minWidth: 24 }}
-                    >
-                      +
-                    </Button>
-                  </Box>
-                  {(records[type] || []).map((val, i) => (
-                    <Box key={i} sx={{ display: "flex", gap: 0.5, mb: 0.5 }}>
-                      <TextField
-                        size="small"
-                        fullWidth
-                        value={val}
-                        onChange={(e) => updateRecordValue(code, type, i, e.target.value)}
-                        placeholder={RECORD_PLACEHOLDERS[type]}
-                        error={!!recordErrors[`${code}:${type}:${i}`]}
-                        helperText={recordErrors[`${code}:${type}:${i}`] || undefined}
-                        slotProps={{
-                          input: {
-                            sx: { borderRadius: 1.5, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" },
-                          },
-                        }}
-                      />
-                      <IconButton size="small" onClick={() => removeRecordValue(code, type, i)}>
-                        <CloseIcon sx={{ fontSize: 14 }} />
+                      color="primary"
+                      sx={{
+                        mt: 0.75,
+                        width: 64,
+                        flexShrink: 0,
+                        fontWeight: 600,
+                        fontFamily: "var(--font-jetbrains-mono), monospace",
+                        fontSize: "0.72rem",
+                      }}
+                    />
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={val}
+                      autoFocus={focusRecordKey === key}
+                      onFocus={() => { if (focusRecordKey === key) setFocusRecordKey(null); }}
+                      onChange={(e) => updateRecordValue(code, type, i, e.target.value)}
+                      placeholder={RECORD_PLACEHOLDERS[type]}
+                      error={!!recordErrors[key]}
+                      helperText={recordErrors[key] || undefined}
+                      slotProps={{
+                        input: {
+                          sx: { borderRadius: 1.5, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" },
+                        },
+                      }}
+                    />
+                    <Tooltip title={formatMessage(messages.removeRecord, { type: recordShortLabel(type) })}>
+                      <IconButton size="small" onClick={() => removeRecordValue(code, type, i)} sx={{ mt: 0.5 }}>
+                        <CloseIcon sx={{ fontSize: 16 }} />
                       </IconButton>
-                    </Box>
-                  ))}
-                </Box>
-              ))}
+                    </Tooltip>
+                  </Box>
+                );
+              }))}
+
+              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.75, mt: 0.5 }}>
+                {QUICK_RECORD_TYPES.map((type) => (
+                  <Button
+                    key={type}
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AddIcon sx={{ fontSize: "16px !important" }} />}
+                    onClick={() => addRecordValue(code, type)}
+                    sx={{ textTransform: "none", borderRadius: 1.5, py: 0.25, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.75rem" }}
+                  >
+                    {recordShortLabel(type)}
+                  </Button>
+                ))}
+                <Button
+                  size="small"
+                  endIcon={<ExpandMoreIcon />}
+                  onClick={(e) => setRecordTypeMenu({ anchor: e.currentTarget, country: code })}
+                  sx={{ textTransform: "none", borderRadius: 1.5, py: 0.25, fontSize: "0.75rem" }}
+                >
+                  {messages.moreRecordTypes}
+                </Button>
+              </Box>
             </CardContent>
           </Card>
         ))}
+
+        <Menu
+          anchorEl={recordTypeMenu?.anchor}
+          open={!!recordTypeMenu}
+          onClose={() => setRecordTypeMenu(null)}
+        >
+          {MORE_RECORD_TYPES.map((type) => (
+            <MenuItem
+              key={type}
+              dense
+              onClick={() => {
+                if (recordTypeMenu) addRecordValue(recordTypeMenu.country, type);
+                setRecordTypeMenu(null);
+              }}
+              sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem" }}
+            >
+              {recordLabel(type)}
+            </MenuItem>
+          ))}
+        </Menu>
       </Box>
     </Box>
   );
@@ -651,7 +790,7 @@ export default function ZonesPage() {
   if (!hasToken()) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <Typography variant="h6" color="text.secondary">Please enter your API token</Typography>
+        <Typography variant="h6" color="text.secondary">{messages.pleaseEnterToken}</Typography>
       </Box>
     );
   }
@@ -664,7 +803,7 @@ export default function ZonesPage() {
             {messages.zoneManagement}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {zones.length} zone{zones.length !== 1 ? "s" : ""}
+            {formatMessage(messages.zonesTotal, { count: zones.length })}
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
@@ -691,7 +830,7 @@ export default function ZonesPage() {
       <Box sx={{ display: "flex", gap: { xs: 1.25, sm: 2 }, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
         <TextField
           size="small"
-          placeholder="Search zones..."
+          placeholder={messages.searchZonesPlaceholder}
           value={searchQuery}
           onChange={(e) => { setSearchQuery(e.target.value); clearSelection(); }}
           slotProps={{
@@ -731,7 +870,7 @@ export default function ZonesPage() {
             size="small"
           />
           <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-            {selectedPatterns.size > 0 ? `${selectedPatterns.size} selected` : "Select all"}
+            {selectedPatterns.size > 0 ? formatMessage(messages.selectedCount, { count: selectedPatterns.size }) : messages.selectAll}
           </Typography>
           {selectedPatterns.size > 0 && (
             <Button
@@ -742,7 +881,7 @@ export default function ZonesPage() {
               onClick={() => setBatchDeleteOpen(true)}
               sx={{ textTransform: "none", borderRadius: 2 }}
             >
-              Delete Selected ({selectedPatterns.size})
+              {messages.deleteSelected} ({selectedPatterns.size})
             </Button>
           )}
         </Box>
@@ -847,9 +986,9 @@ export default function ZonesPage() {
                   checked={selectedPatterns.has(zone.pattern)}
                   onChange={() => toggleSelect(zone.pattern)}
                   size="small"
-                  slotProps={{ input: { "aria-label": `Select ${zone.pattern}` } }}
+                  slotProps={{ input: { "aria-label": formatMessage(messages.selectZone, { zone: zone.pattern }) } }}
                 />
-                <ButtonBase onClick={() => setExpandedPattern(expandedPattern === zone.pattern ? null : zone.pattern)} aria-expanded={expandedPattern === zone.pattern} aria-label={`Toggle ${zone.pattern} details`} sx={{ minWidth: 0, minHeight: 52, px: 1, display: "flex", justifyContent: "space-between", textAlign: "left" }}>
+                <ButtonBase onClick={() => setExpandedPattern(expandedPattern === zone.pattern ? null : zone.pattern)} aria-expanded={expandedPattern === zone.pattern} aria-label={formatMessage(messages.toggleZoneDetails, { zone: zone.pattern })} sx={{ minWidth: 0, minHeight: 52, px: 1, display: "flex", justifyContent: "space-between", textAlign: "left" }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, overflow: "hidden" }}>
                     <Typography title={zone.pattern} noWrap sx={{ minWidth: 0, fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.85rem", fontWeight: 600 }}>
                       {zone.pattern}
@@ -866,7 +1005,7 @@ export default function ZonesPage() {
 				{compactActions ? (
 				  <IconButton
 				    size="small"
-				    aria-label={`More actions for ${zone.pattern}`}
+				    aria-label={formatMessage(messages.moreActionsFor, { zone: zone.pattern })}
 				    onClick={(event) => {
 				      setZoneMenuAnchor(event.currentTarget);
 				      setZoneMenuTarget(zone);
@@ -920,11 +1059,11 @@ export default function ZonesPage() {
                   {editorFields}
                   <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 2 }}>
                     <Button onClick={() => setEditingPattern(null)} disabled={saving}>{messages.cancel}</Button>
-                    <Button variant="contained" onClick={handleSave} disabled={saving || updatingPattern === zone.pattern || !editingZone.pattern.trim()}>{saving ? "Saving..." : messages.save}</Button>
+                    <Button variant="contained" onClick={handleSave} disabled={saving || updatingPattern === zone.pattern || !editingZone.pattern.trim()}>{saving ? messages.savingDots : messages.save}</Button>
                   </Box>
                 </> : <>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">TTL: {zone.ttl}s</Typography>
+                  <Typography variant="body2" color="text.secondary">{formatMessage(messages.ttlValue, { ttl: zone.ttl })}</Typography>
                     <Button size="small" startIcon={<EditIcon />} onClick={() => openEditEditor(zone)} disabled={updatingPattern === zone.pattern}>{messages.editZone}</Button>
                 </Box>
                 <Box>
@@ -983,7 +1122,7 @@ export default function ZonesPage() {
                             {RECORD_TYPES.filter((t) => (records[t] || []).length > 0).map((type) => (
                               <TableRow key={type}>
                                 <TableCell sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem", width: 100 }}>
-                                  {RECORD_LABELS[type]}
+                                  {recordLabel(type)}
                                 </TableCell>
                                 <TableCell sx={{ fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: "0.8rem", wordBreak: "break-all" }}>
                                   {(records[type] || []).join(", ")}
@@ -1088,7 +1227,7 @@ export default function ZonesPage() {
             disabled={saving || !editingZone.pattern.trim()}
             sx={{ textTransform: "none", borderRadius: 2, px: 4 }}
           >
-            {saving ? "Saving..." : "Save Zone"}
+            {saving ? messages.savingDots : messages.saveZone}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1101,16 +1240,16 @@ export default function ZonesPage() {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700 }}>
-          {deleteCountry ? "Delete Country" : "Delete Zone"}
+          {deleteCountry ? messages.deleteCountry : messages.deleteZone}
         </DialogTitle>
         <DialogContent>
           <Typography>
             {deleteCountry
-              ? `Are you sure you want to delete country "${deleteCountry}" from this zone?`
-              : `Are you sure you want to delete the entire zone "${deleteTarget?.pattern}"?`}
+              ? formatMessage(messages.deleteCountryConfirm, { country: deleteCountry })
+              : formatMessage(messages.deleteZoneConfirm, { zone: deleteTarget?.pattern ?? "" })}
           </Typography>
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            {deleteCountry ? "This action cannot be undone." : "This will delete ALL countries and records. This action cannot be undone."}
+            {deleteCountry ? messages.cannotUndo : messages.deleteAllZoneWarning}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1124,7 +1263,7 @@ export default function ZonesPage() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete"}
+            {deleting ? messages.deletingDots : messages.delete}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1136,13 +1275,13 @@ export default function ZonesPage() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Selected Zones</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteSelectedZones}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete {selectedPatterns.size} selected zone(s)?
+            {formatMessage(messages.deleteSelectedZonesConfirm, { count: selectedPatterns.size })}
           </Typography>
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This will delete ALL countries and records for each zone. This action cannot be undone.
+            {messages.deleteAllSelectedWarning}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1156,7 +1295,7 @@ export default function ZonesPage() {
             disabled={batchDeleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {batchDeleting ? "Deleting..." : `Delete ${selectedPatterns.size} zone(s)`}
+            {batchDeleting ? messages.deletingDots : formatMessage(messages.deleteZonesCount, { count: selectedPatterns.size })}
           </Button>
         </DialogActions>
       </Dialog>

@@ -26,6 +26,8 @@ export interface Zone {
   ttl: number;
   record: boolean;
   fast_open: boolean;
+  /** Answer A/AAAA with the CNAME target's addresses so the CNAME can sit next to other records. */
+  cname_flatten?: boolean;
 }
 
 export interface ZoneListResponse {

@@ -40,9 +40,12 @@ import { alpha } from "@mui/material";
 import { hasToken, listQueries, deleteQueries, deleteQueryById } from "../lib/api";
 import type { QueryItem } from "../lib/types";
 import { useDocumentTitle } from "../useDocumentTitle";
-import { useDnsMessages } from "../i18n";
+import { useDnsMessages, formatMessage } from "../i18n";
 
 const PAGE_SIZE = 20;
+
+// Only called from event handlers; kept outside the component for the purity lint.
+const currentTime = () => Date.now();
 
 export default function QueriesPage() {
   const theme = useTheme();
@@ -113,20 +116,22 @@ export default function QueriesPage() {
       setItems(data.items);
       setTotal(data.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch queries");
+      setError(err instanceof Error ? err.message : messages.failedToFetchQueries);
       setItems([]);
       setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [searchDomain, searchClientIp, searchSubnet, searchCountryCode, searchServerHostname, startTime, endTime, page]);
+  }, [searchDomain, searchClientIp, searchSubnet, searchCountryCode, searchServerHostname, startTime, endTime, page, messages.failedToFetchQueries]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads data whenever the filters change.
     fetchQueries();
   }, [fetchQueries]);
 
   // Clear selection when page/items change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a new result set starts with nothing selected.
     setSelectedIds(new Set());
   }, [page, searchDomain, searchClientIp, searchSubnet, searchCountryCode, searchServerHostname, startTime, endTime]);
 
@@ -166,7 +171,7 @@ export default function QueriesPage() {
   };
 
   const handleQuickTime = (hoursAgo: number) => {
-    const d = new Date(Date.now() - hoursAgo * 3600000);
+    const d = new Date(currentTime() - hoursAgo * 3600000);
     const value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setStartTime(value);
     setEndTime("");
@@ -175,10 +180,10 @@ export default function QueriesPage() {
   };
 
   const QUICK_TIMES = [
-    { label: "1h ago", hours: 1 },
-    { label: "1d ago", hours: 24 },
-    { label: "3d ago", hours: 72 },
-    { label: "1w ago", hours: 168 },
+    { label: formatMessage(messages.timeAgoHours, { count: 1 }), hours: 1 },
+    { label: formatMessage(messages.timeAgoDays, { count: 1 }), hours: 24 },
+    { label: formatMessage(messages.timeAgoDays, { count: 3 }), hours: 72 },
+    { label: formatMessage(messages.timeAgoWeeks, { count: 1 }), hours: 168 },
   ];
 
   // --- Selection helpers ---
@@ -245,15 +250,18 @@ export default function QueriesPage() {
         }
         showToast(
           failed.length > 0
-            ? `Deleted ${deleted} query record${deleted !== 1 ? "s" : ""}; ${failed.length} failed`
-            : `Deleted ${deleted} query record${deleted !== 1 ? "s" : ""}`,
+            ? formatMessage(messages.deletedQueriesPartial, { deleted, failed: failed.length })
+            : formatMessage(messages.deletedQueries, { deleted }),
           failed.length > 0 ? "error" : "success"
         );
         setSelectedIds(new Set(failed));
       } else if (deleteTarget.type === "domain" && deleteTarget.domain) {
         const result = await deleteQueries({ domain: deleteTarget.domain });
         showToast(
-          `Deleted ${result.deleted} query records for "${deleteTarget.domain}"`,
+          formatMessage(messages.deletedQueriesForDomain, {
+            deleted: result.deleted,
+            domain: deleteTarget.domain,
+          }),
           "success"
         );
       }
@@ -261,7 +269,7 @@ export default function QueriesPage() {
       await fetchQueries();
       setDeleteOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -279,12 +287,12 @@ export default function QueriesPage() {
         start: startTime || undefined,
         end: endTime || undefined,
       });
-      showToast(`Deleted ${result.deleted} query records matching filter`, "success");
+      showToast(formatMessage(messages.deletedQueriesFiltered, { deleted: result.deleted }), "success");
       setSelectedIds(new Set());
       await fetchQueries();
       setDeleteFilteredOpen(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Delete filtered failed", "error");
+      showToast(err instanceof Error ? err.message : messages.deleteFilteredFailed, "error");
     } finally {
       setDeleting(false);
     }
@@ -297,9 +305,9 @@ export default function QueriesPage() {
   const copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast("Copied", "success");
+      showToast(messages.copied, "success");
     } catch {
-      showToast("Failed to copy", "error");
+      showToast(messages.copyFailed, "error");
     }
   };
 
@@ -374,7 +382,7 @@ export default function QueriesPage() {
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Filter by domain..."
+              placeholder={messages.filterByDomainPlaceholder}
               slotProps={{
                 input: {
                   sx: {
@@ -391,7 +399,7 @@ export default function QueriesPage() {
               value={clientIp}
               onChange={(e) => setClientIp(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. 203.0.113.5"
+              placeholder={formatMessage(messages.exampleValue, { value: "203.0.113.5" })}
               slotProps={{
                 input: {
                   sx: {
@@ -408,7 +416,7 @@ export default function QueriesPage() {
               value={subnet}
               onChange={(e) => setSubnet(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. 203.0.113.0/24"
+              placeholder={formatMessage(messages.exampleValue, { value: "203.0.113.0/24" })}
               slotProps={{
                 input: {
                   sx: {
@@ -425,7 +433,7 @@ export default function QueriesPage() {
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. CN"
+              placeholder={formatMessage(messages.exampleValue, { value: "CN" })}
               slotProps={{
                 input: {
                   sx: {
@@ -442,7 +450,7 @@ export default function QueriesPage() {
               value={serverHostname}
               onChange={(e) => setServerHostname(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. ns1.example.com"
+              placeholder={formatMessage(messages.exampleValue, { value: "ns1.example.com" })}
               slotProps={{
                 input: {
                   sx: {
@@ -550,7 +558,7 @@ export default function QueriesPage() {
                   onClick={() => confirmDeleteDomain(searchDomain)}
                   sx={{ textTransform: "none", borderRadius: 2 }}
                 >
-                  Delete Domain
+                  {messages.deleteDomain}
                 </Button>
               )}
               {(searchDomain || searchClientIp || searchSubnet || searchCountryCode || searchServerHostname || startTime || endTime) && (
@@ -597,7 +605,7 @@ export default function QueriesPage() {
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {selectedIds.size} record{selectedIds.size !== 1 ? "s" : ""} selected
+            {formatMessage(messages.recordsSelected, { count: selectedIds.size })}
           </Typography>
           <Button
             variant="contained"
@@ -645,8 +653,8 @@ export default function QueriesPage() {
             </Typography>
             <Typography variant="body2" color="text.disabled">
               {searchDomain
-                ? `No records for "${searchDomain}"`
-                : "Try searching for a specific domain or adjust the time range"}
+                ? formatMessage(messages.noRecordsForDomain, { domain: searchDomain })
+                : messages.noQueriesHint}
             </Typography>
           </CardContent>
         </Card>
@@ -953,13 +961,13 @@ export default function QueriesPage() {
                       {item.geo_cached ? (
                         <Chip
                           icon={<CachedIcon sx={{ fontSize: 12 }} />}
-                          label="Yes"
+                          label={messages.yes}
                           size="small"
                           color="success"
                           variant="outlined"
                         />
                       ) : (
-                        <Typography variant="caption" color="text.disabled">No</Typography>
+                        <Typography variant="caption" color="text.disabled">{messages.no}</Typography>
                       )}
                     </TableCell>
                     <TableCell
@@ -997,7 +1005,7 @@ export default function QueriesPage() {
                       {formatTime(item.created_at)}
                     </TableCell>
                     <TableCell>
-                      <Tooltip title="Delete this record">
+                      <Tooltip title={messages.deleteThisRecord}>
                         <IconButton
                           size="small"
                           onClick={() => rowId != null && confirmDeleteSingle(rowId)}
@@ -1031,21 +1039,27 @@ export default function QueriesPage() {
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Records</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteRecordsTitle}</DialogTitle>
         <DialogContent>
           {deleteTarget?.type === "id" ? (
             <Typography>
-              Are you sure you want to delete{" "}
+              {messages.deleteConfirmPrefix}{" "}
               <strong>{deleteTarget.ids?.length}</strong>{" "}
-              query record{deleteTarget.ids?.length !== 1 ? "s" : ""}?
+              {messages.queryRecordsSuffix}
             </Typography>
           ) : (
             <Typography>
-              Are you sure you want to delete <strong>all</strong> query history for domain &quot;{deleteTarget?.domain}&quot;?
+              {formatMessage(messages.deleteDomainHistoryPrefix, {
+                domain: deleteTarget?.domain ?? "",
+              })}
+              <strong>{messages.all}</strong>
+              {formatMessage(messages.deleteDomainHistorySuffix, {
+                domain: deleteTarget?.domain ?? "",
+              })}
             </Typography>
           )}
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This action cannot be undone.
+            {messages.cannotUndo}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1059,43 +1073,73 @@ export default function QueriesPage() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete"}
+            {deleting ? messages.deletingDots : messages.delete}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete filtered dialog */}
       <Dialog open={deleteFilteredOpen} onClose={() => setDeleteFilteredOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Filtered Queries</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{messages.deleteFilteredQueriesTitle}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>all</strong> query records matching the current filter?
+            {messages.deleteFilteredConfirmPrefix}
+            <strong>{messages.all}</strong>
+            {messages.deleteFilteredConfirmSuffix}
           </Typography>
           <Box sx={{ mt: 1.5, display: "flex", flexWrap: "wrap", gap: 0.5 }}>
             {searchDomain && (
-              <Chip label={`Domain: ${searchDomain}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterDomain, { value: searchDomain })}
+                size="small"
+                variant="outlined"
+              />
             )}
             {searchClientIp && (
-              <Chip label={`IP: ${searchClientIp}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterIp, { value: searchClientIp })}
+                size="small"
+                variant="outlined"
+              />
             )}
             {searchSubnet && (
-              <Chip label={`Subnet: ${searchSubnet}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterSubnet, { value: searchSubnet })}
+                size="small"
+                variant="outlined"
+              />
             )}
             {searchCountryCode && (
-              <Chip label={`Country: ${searchCountryCode}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterCountry, { value: searchCountryCode })}
+                size="small"
+                variant="outlined"
+              />
             )}
             {searchServerHostname && (
-              <Chip label={`Host: ${searchServerHostname}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterHost, { value: searchServerHostname })}
+                size="small"
+                variant="outlined"
+              />
             )}
             {startTime && (
-              <Chip label={`Start: ${startTime}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterStart, { value: startTime })}
+                size="small"
+                variant="outlined"
+              />
             )}
             {endTime && (
-              <Chip label={`End: ${endTime}`} size="small" variant="outlined" />
+              <Chip
+                label={formatMessage(messages.filterEnd, { value: endTime })}
+                size="small"
+                variant="outlined"
+              />
             )}
           </Box>
           <Typography variant="body2" color="error.main" sx={{ mt: 1, fontWeight: 600 }}>
-            This action cannot be undone.
+            {messages.cannotUndo}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1109,7 +1153,7 @@ export default function QueriesPage() {
             disabled={deleting}
             sx={{ textTransform: "none", borderRadius: 2 }}
           >
-            {deleting ? "Deleting..." : "Delete Filtered"}
+            {deleting ? messages.deletingDots : messages.deleteFiltered}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1122,30 +1166,33 @@ export default function QueriesPage() {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700 }}>
-          EDNS Client Subnet — #{ednsDetailItem?.id} {ednsDetailItem?.domain}
+          {formatMessage(messages.ednsClientSubnetTitle, {
+            id: ednsDetailItem?.id ?? "",
+            domain: ednsDetailItem?.domain ?? "",
+          })}
         </DialogTitle>
         <DialogContent>
           <Table size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.04) }}>
                 <TableCell />
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Client Geo</TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>EDNS Geo</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>{messages.clientGeo}</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>{messages.ednsGeo}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {(
                 [
-                  { label: "Subnet", client: ednsDetailItem?.client_ip, edns: ednsDetailItem?.edns_subnet },
-                  { label: "Country", client: ednsDetailItem?.country_code, edns: ednsDetailItem?.edns_country_code },
-                  { label: "City", client: ednsDetailItem?.city, edns: ednsDetailItem?.edns_city },
-                  { label: "ASN", client: ednsDetailItem?.asn, edns: ednsDetailItem?.edns_asn },
-                  { label: "AS Name", client: ednsDetailItem?.as_name, edns: ednsDetailItem?.edns_as_name },
-                  { label: "NSID", client: "—", edns: ednsDetailItem?.nsid },
+                  { field: "subnet", label: messages.subnet, client: ednsDetailItem?.client_ip, edns: ednsDetailItem?.edns_subnet },
+                  { field: "country", label: messages.country, client: ednsDetailItem?.country_code, edns: ednsDetailItem?.edns_country_code },
+                  { field: "city", label: messages.city, client: ednsDetailItem?.city, edns: ednsDetailItem?.edns_city },
+                  { field: "asn", label: messages.asn, client: ednsDetailItem?.asn, edns: ednsDetailItem?.edns_asn },
+                  { field: "asName", label: messages.asName, client: ednsDetailItem?.as_name, edns: ednsDetailItem?.edns_as_name },
+                  { field: "nsid", label: "NSID", client: "—", edns: ednsDetailItem?.nsid },
                 ] as const
               ).map((row) => (
                 <TableRow
-                  key={row.label}
+                  key={row.field}
                   sx={{
                     bgcolor:
                       row.client && row.edns && row.client !== row.edns
@@ -1172,7 +1219,7 @@ export default function QueriesPage() {
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                       <span>{row.client || "—"}</span>
-                      {row.client && row.label !== "NSID" && (
+                      {row.client && row.field !== "nsid" && (
                         <IconButton size="small" onClick={() => copyText(row.client!)}>
                           <ContentCopyIcon sx={{ fontSize: 12 }} />
                         </IconButton>
@@ -1188,7 +1235,7 @@ export default function QueriesPage() {
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                       <span>{row.edns || "—"}</span>
-                      {row.edns && row.label !== "NSID" && (
+                      {row.edns && row.field !== "nsid" && (
                         <IconButton size="small" onClick={() => copyText(row.edns!)}>
                           <ContentCopyIcon sx={{ fontSize: 12 }} />
                         </IconButton>
@@ -1200,7 +1247,7 @@ export default function QueriesPage() {
             </TableBody>
           </Table>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-            Rows highlighted when Client Geo differs from EDNS Geo.
+            {messages.ednsDiffHint}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>

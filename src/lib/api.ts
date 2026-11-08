@@ -141,10 +141,8 @@ async function apiFetch<T>(
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const { headers: _providedHeaders, ...requestOptions } = options;
-
   const res = await fetch(`${apiBase}${path}`, {
-    ...requestOptions,
+    ...options,
     headers,
   });
 
